@@ -10,7 +10,10 @@
         <h1 style="color:var(--primary);margin-bottom:0.3rem;">{{ stage.name }}</h1>
         <p style="color:var(--text-light);">{{ stage.location }} {% if stage.description %}· {{ stage.description }}{% endif %}</p>
     </div>
-    <a href="/stages/{{ stage.id }}/compare" class="btn btn-info">对比分析</a>
+    <div class="actions">
+        <a href="/stages/{{ stage.id }}/versions" class="btn btn-warning">版本管理</a>
+        <a href="/stages/{{ stage.id }}/compare" class="btn btn-info">对比分析</a>
+    </div>
 </div>
 
 <div class="stat-grid">

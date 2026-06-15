@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% block title %}{{ version.version_number }} - 版本详情{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/stages/{{ stage.id }}/versions" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回版本列表</a>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;">
+    <div>
+        <h1 style="color:var(--primary);margin-bottom:0.3rem;">
+            {{ version.version_number }}
+            {% if version.version_name %}- {{ version.version_name }}{% endif %}
+        </h1>
+        <p style="color:var(--text-light);">
+            {{ stage.name }} · 创建于 {{ version.created_at }}
+            {% if version.created_by %} · 创建人：{{ version.created_by }}{% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        {% if other_versions|length >= 1 %}
+        <select id="compareSelect" class="btn btn-outline" style="padding:0.4rem 0.8rem;" onchange="handleCompare(this)">
+            <option value="">与其他版本对比...</option>
+            {% for ov in other_versions %}
+            <option value="{{ ov.id }}">对比 {{ ov.version_number }} - {{ ov.version_name or '未命名' }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        <button class="btn btn-warning" onclick="document.getElementById('reviewModal').style.display='flex'">审核版本</button>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;">
+        <div style="flex:1;min-width:250px;">
+            <h3>基本信息</h3>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:0.5rem 1.5rem;font-size:0.9rem;">
+                <span style="color:var(--text-light);">版本号：</span><span style="font-weight:600;">{{ version.version_number }}</span>
+                <span style="color:var(--text-light);">版本名称：</span><span>{{ version.version_name or '-' }}</span>
+                <span style="color:var(--text-light);">创建人：</span><span>{{ version.created_by or '-' }}</span>
+                <span style="color:var(--text-light);">更新时间：</span><span>{{ version.update_time }}</span>
+                <span style="color:var(--text-light);">数据来源：</span><span>{{ version.data_source or '-' }}</span>
+                <span style="color:var(--text-light);">父版本：</span>
+                <span>
+                    {% if version.parent_version_number %}
+                    <a href="/stages/{{ stage.id }}/versions/{{ version.parent_version_id }}" class="badge badge-info">{{ version.parent_version_number }}</a>
+                    {% else %}
+                    <span class="missing-indicator">初始版本</span>
+                    {% endif %}
+                </span>
+                <span style="color:var(--text-light);">审核状态：</span>
+                <span>
+                    {% if version.review_status == 'pending' %}
+                    <span class="badge badge-warning">待审核</span>
+                    {% elif version.review_status == 'approved' %}
+                    <span class="badge badge-success">已通过</span>
+                    {% elif version.review_status == 'rejected' %}
+                    <span class="badge badge-danger">已驳回</span>
+                    {% endif %}
+                </span>
+                {% if version.reviewed_by %}
+                <span style="color:var(--text-light);">审核人：</span><span>{{ version.reviewed_by }}</span>
+                {% endif %}
+                {% if version.review_time %}
+                <span style="color:var(--text-light);">审核时间：</span><span>{{ version.review_time }}</span>
+                {% endif %}
+            </div>
+            {% if version.modification_description %}
+            <div style="margin-top:1rem;">
+                <h4 style="color:var(--primary-light);margin-bottom:0.3rem;">修改说明</h4>
+                <p style="background:rgba(212,165,116,0.1);padding:0.8rem;border-radius:6px;font-size:0.9rem;">
+                    {{ version.modification_description }}
+                </p>
+            </div>
+            {% endif %}
+            {% if version.review_comment %}
+            <div style="margin-top:1rem;">
+                <h4 style="color:var(--primary-light);margin-bottom:0.3rem;">审核意见</h4>
+                <p style="background:rgba(212,165,116,0.1);padding:0.8rem;border-radius:6px;font-size:0.9rem;">
+                    {{ version.review_comment }}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-item">
+        <div class="stat-value">{{ point_snapshots|length }}</div>
+        <div class="stat-label">测量点快照</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ acoustic_snapshots|length }}</div>
+        <div class="stat-label">声学数据快照</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ change_logs|length }}</div>
+        <div class="stat-label">变更记录</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">
+            {% if conclusion_data %}
+                {% if conclusion_data.is_confirmed %}
+                <span style="color:var(--success);">已确认</span>
+                {% else %}
+                <span style="color:var(--warning);">待确认</span>
+                {% endif %}
+            {% else %}
+            <span style="color:var(--text-light);">无</span>
+            {% endif %}
+        </div>
+        <div class="stat-label">结论状态</div>
+    </div>
+</div>
+
+<div class="tab-bar">
+    <a href="javascript:void(0)" class="active" onclick="showVerTab(event, 'points')">测量点快照</a>
+    <a href="javascript:void(0)" onclick="showVerTab(event, 'acoustic')">声学数据快照</a>
+    <a href="javascript:void(0)" onclick="showVerTab(event, 'stats')">均值统计</a>
+    <a href="javascript:void(0)" onclick="showVerTab(event, 'changelog')">变更日志</a>
+    <a href="javascript:void(0)" onclick="showVerTab(event, 'conclusion')">结论快照</a>
+</div>
+
+<div id="tab-points" class="ver-tab">
+    <div class="card">
+        <h2>测量点快照</h2>
+        {% if point_snapshots %}
+        <table>
+            <thead>
+                <tr>
+                    <th>标签</th>
+                    <th>X坐标</th>
+                    <th>Y坐标</th>
+                    <th>变更类型</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in point_snapshots %}
+                <tr>
+                    <td style="font-weight:600;">{{ p.label }}</td>
+                    <td>{{ '%.2f'|format(p.x) }}</td>
+                    <td>{{ '%.2f'|format(p.y) }}</td>
+                    <td>
+                        {% if p.change_type == 'added' %}
+                        <span class="badge badge-success">新增</span>
+                        {% elif p.change_type == 'modified' %}
+                        <span class="badge badge-warning">修改</span>
+                        {% elif p.change_type == 'removed' %}
+                        <span class="badge badge-danger">删除</span>
+                        {% else %}
+                        <span class="badge badge-info">未变</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">暂无测量点数据</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-acoustic" class="ver-tab" style="display:none;">
+    <div class="card">
+        <h2>声学数据快照</h2>
+        {% if acoustic_snapshots %}
+        <table>
+            <thead>
+                <tr>
+                    <th>测量点</th>
+                    <th>声压(dB)</th>
+                    <th>混响时间(s)</th>
+                    <th>语言清晰度(STI)</th>
+                    <th>备注</th>
+                    <th>变更类型</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in acoustic_snapshots %}
+                <tr>
+                    <td style="font-weight:600;">{{ a.point_label }}</td>
+                    <td>{{ '%.2f'|format(a.sound_pressure) if a.sound_pressure is not none else '-' }}</td>
+                    <td>{{ '%.2f'|format(a.reverberation_time) if a.reverberation_time is not none else '-' }}</td>
+                    <td>{{ '%.3f'|format(a.speech_clarity) if a.speech_clarity is not none else '-' }}</td>
+                    <td style="font-size:0.8rem;color:var(--text-light);">{{ a.notes or '-' }}</td>
+                    <td>
+                        {% if a.change_type == 'added' %}
+                        <span class="badge badge-success">新增</span>
+                        {% elif a.change_type == 'modified' %}
+                        <span class="badge badge-warning">修改</span>
+                        {% elif a.change_type == 'removed' %}
+                        <span class="badge badge-danger">删除</span>
+                        {% else %}
+                        <span class="badge badge-info">未变</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">暂无声学数据</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-stats" class="ver-tab" style="display:none;">
+    <div class="card">
+        <h2>均值统计（基于本版本快照数据）</h2>
+        {% for metric_name, metric_cn in [('sound_pressure', '声压 (dB)'), ('reverberation_time', '混响时间 (s)'), ('speech_clarity', '语言清晰度 (STI)')] %}
+        <div style="margin-bottom:1.5rem;">
+            <h3>{{ metric_cn }}</h3>
+            {% if statistics[metric_name] %}
+            <div class="stat-grid" style="grid-template-columns:repeat(auto-fit, minmax(120px, 1fr));">
+                <div class="stat-item">
+                    <div class="stat-value">{{ statistics[metric_name].count }}</div>
+                    <div class="stat-label">样本数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ statistics[metric_name].mean }}</div>
+                    <div class="stat-label">均值</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ statistics[metric_name].min }}</div>
+                    <div class="stat-label">最小值</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ statistics[metric_name].max }}</div>
+                    <div class="stat-label">最大值</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ statistics[metric_name].std }}</div>
+                    <div class="stat-label">标准差</div>
+                </div>
+            </div>
+            {% else %}
+            <p style="color:var(--text-light);">无有效数据</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div id="tab-changelog" class="ver-tab" style="display:none;">
+    <div class="card">
+        <h2>变更日志</h2>
+        {% if change_logs %}
+        <table>
+            <thead>
+                <tr>
+                    <th>时间</th>
+                    <th>类别</th>
+                    <th>变更详情</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in change_logs %}
+                <tr>
+                    <td style="font-size:0.8rem;color:var(--text-light);width:160px;">{{ log.created_at }}</td>
+                    <td><span class="badge badge-info">{{ log.change_category }}</span></td>
+                    <td>{{ log.change_detail }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">暂无变更记录</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-conclusion" class="ver-tab" style="display:none;">
+    <div class="card">
+        <h2>结论快照</h2>
+        {% if conclusion_data %}
+        <div class="conclusion-card {% if conclusion_data.is_confirmed %}confirmed{% else %}abnormal{% endif %}">
+            <p style="margin-bottom:0.8rem;">{{ conclusion_data.content }}</p>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+                {% if conclusion_data.is_confirmed %}
+                <span class="badge badge-success">已确认</span>
+                {% else %}
+                <span class="badge badge-warning">待确认</span>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">创建版本时未捕获到分析结论</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="reviewModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;">
+    <div class="card" style="width:90%;max-width:500px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;border:none;padding:0;">版本审核 - {{ version.version_number }}</h2>
+            <button onclick="document.getElementById('reviewModal').style.display='none'"
+                    style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-light);">&times;</button>
+        </div>
+        <form action="/stages/{{ stage.id }}/versions/{{ version.id }}/review" method="post">
+            <div class="form-group">
+                <label>审核结果</label>
+                <select name="review_status" required>
+                    <option value="pending" {% if version.review_status == 'pending' %}selected{% endif %}>待审核</option>
+                    <option value="approved" {% if version.review_status == 'approved' %}selected{% endif %}>通过审核</option>
+                    <option value="rejected" {% if version.review_status == 'rejected' %}selected{% endif %}>驳回</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>审核人</label>
+                <input type="text" name="reviewed_by" value="{{ version.reviewed_by or '' }}" placeholder="审核人姓名" />
+            </div>
+            <div class="form-group">
+                <label>审核意见</label>
+                <textarea name="review_comment" rows="3" placeholder="填写审核意见或建议...">{{ version.review_comment or '' }}</textarea>
+            </div>
+            <div class="actions" style="justify-content:flex-end;">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('reviewModal').style.display='none'">取消</button>
+                <button type="submit" class="btn btn-primary">提交审核</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function showVerTab(e, tabName) {
+    e.preventDefault();
+    document.querySelectorAll('.ver-tab').forEach(function(tab) {
+        tab.style.display = 'none';
+    });
+    document.querySelectorAll('.tab-bar a').forEach(function(link) {
+        link.classList.remove('active');
+    });
+    document.getElementById('tab-' + tabName).style.display = 'block';
+    e.currentTarget.classList.add('active');
+}
+function handleCompare(sel) {
+    if (sel.value) {
+        window.location.href = '/stages/{{ stage.id }}/versions/compare?version_a={{ version.id }}&version_b=' + sel.value;
+        sel.value = '';
+    }
+}
+</script>
+{% endblock %}

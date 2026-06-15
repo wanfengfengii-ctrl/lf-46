@@ -161,6 +161,64 @@ def init_db():
             uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (task_id) REFERENCES measurement_tasks(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS measurement_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            stage_id INTEGER NOT NULL,
+            version_number TEXT NOT NULL,
+            version_name TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            modification_description TEXT NOT NULL DEFAULT '',
+            data_source TEXT NOT NULL DEFAULT '',
+            review_status TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by TEXT NOT NULL DEFAULT '',
+            review_time TIMESTAMP,
+            review_comment TEXT NOT NULL DEFAULT '',
+            parent_version_id INTEGER,
+            session_id INTEGER,
+            conclusion_snapshot TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (stage_id) REFERENCES stages(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_version_id) REFERENCES measurement_versions(id) ON DELETE SET NULL,
+            FOREIGN KEY (session_id) REFERENCES measurement_sessions(id) ON DELETE SET NULL,
+            UNIQUE(stage_id, version_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS version_point_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            point_id INTEGER,
+            label TEXT NOT NULL,
+            x REAL NOT NULL,
+            y REAL NOT NULL,
+            change_type TEXT NOT NULL DEFAULT 'unchanged',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE,
+            FOREIGN KEY (point_id) REFERENCES measurement_points(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS version_acoustic_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            point_label TEXT NOT NULL,
+            sound_pressure REAL,
+            reverberation_time REAL,
+            speech_clarity REAL,
+            notes TEXT NOT NULL DEFAULT '',
+            change_type TEXT NOT NULL DEFAULT 'unchanged',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS version_change_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            change_category TEXT NOT NULL,
+            change_detail TEXT NOT NULL,
+            old_value TEXT,
+            new_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE
+        );
     """)
 
     cursor.execute("PRAGMA table_info(measurement_sessions)")
@@ -284,6 +342,85 @@ def init_db():
         )
     """, [
         "id", "task_id", "photo_path", "photo_description", "uploaded_at"
+    ])
+
+    migrate_table("measurement_versions", """
+        CREATE TABLE measurement_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            stage_id INTEGER NOT NULL,
+            version_number TEXT NOT NULL,
+            version_name TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL DEFAULT '',
+            update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            modification_description TEXT NOT NULL DEFAULT '',
+            data_source TEXT NOT NULL DEFAULT '',
+            review_status TEXT NOT NULL DEFAULT 'pending',
+            reviewed_by TEXT NOT NULL DEFAULT '',
+            review_time TIMESTAMP,
+            review_comment TEXT NOT NULL DEFAULT '',
+            parent_version_id INTEGER,
+            session_id INTEGER,
+            conclusion_snapshot TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (stage_id) REFERENCES stages(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_version_id) REFERENCES measurement_versions(id) ON DELETE SET NULL,
+            FOREIGN KEY (session_id) REFERENCES measurement_sessions(id) ON DELETE SET NULL,
+            UNIQUE(stage_id, version_number)
+        )
+    """, [
+        "id", "stage_id", "version_number", "version_name", "created_by",
+        "update_time", "modification_description", "data_source", "review_status",
+        "reviewed_by", "review_time", "review_comment", "parent_version_id",
+        "session_id", "conclusion_snapshot", "created_at"
+    ])
+
+    migrate_table("version_point_snapshots", """
+        CREATE TABLE version_point_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            point_id INTEGER,
+            label TEXT NOT NULL,
+            x REAL NOT NULL,
+            y REAL NOT NULL,
+            change_type TEXT NOT NULL DEFAULT 'unchanged',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE,
+            FOREIGN KEY (point_id) REFERENCES measurement_points(id) ON DELETE SET NULL
+        )
+    """, [
+        "id", "version_id", "point_id", "label", "x", "y", "change_type"
+    ])
+
+    migrate_table("version_acoustic_snapshots", """
+        CREATE TABLE version_acoustic_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            point_label TEXT NOT NULL,
+            sound_pressure REAL,
+            reverberation_time REAL,
+            speech_clarity REAL,
+            notes TEXT NOT NULL DEFAULT '',
+            change_type TEXT NOT NULL DEFAULT 'unchanged',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE
+        )
+    """, [
+        "id", "version_id", "point_label", "sound_pressure", "reverberation_time",
+        "speech_clarity", "notes", "change_type"
+    ])
+
+    migrate_table("version_change_logs", """
+        CREATE TABLE version_change_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            change_category TEXT NOT NULL,
+            change_detail TEXT NOT NULL,
+            old_value TEXT,
+            new_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE
+        )
+    """, [
+        "id", "version_id", "change_category", "change_detail", "old_value",
+        "new_value", "created_at"
     ])
 
     conn.commit()

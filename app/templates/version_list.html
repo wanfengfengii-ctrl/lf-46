@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}版本管理 - {{ stage.name }}{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/stages/{{ stage.id }}" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回戏台详情</a>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;">
+    <div>
+        <h1 style="color:var(--primary);margin-bottom:0.3rem;">版本管理 - {{ stage.name }}</h1>
+        <p style="color:var(--text-light);">管理多轮测量数据版本，支持追溯与差异对比</p>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary" onclick="document.getElementById('createVersionModal').style.display='flex'">+ 新建版本</button>
+        <a href="/stages/{{ stage.id }}/versions/compare" class="btn btn-info">版本对比</a>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-item">
+        <div class="stat-value">{{ versions|length }}</div>
+        <div class="stat-label">历史版本</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ versions | selectattr('review_status', 'equalto', 'approved') | list | length }}</div>
+        <div class="stat-label">已通过审核</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ versions | selectattr('review_status', 'equalto', 'pending') | list | length }}</div>
+        <div class="stat-label">待审核</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ versions | selectattr('review_status', 'equalto', 'rejected') | list | length }}</div>
+        <div class="stat-label">已驳回</div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>版本列表</h2>
+    {% if versions %}
+    <table>
+        <thead>
+            <tr>
+                <th>版本号</th>
+                <th>版本名称</th>
+                <th>创建人</th>
+                <th>创建时间</th>
+                <th>父版本</th>
+                <th>测量点</th>
+                <th>数据条数</th>
+                <th>审核状态</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for v in versions %}
+            <tr>
+                <td style="font-weight:700;color:var(--primary);">{{ v.version_number }}</td>
+                <td>{{ v.version_name or '-' }}</td>
+                <td>{{ v.created_by or '-' }}</td>
+                <td style="font-size:0.8rem;color:var(--text-light);">{{ v.created_at }}</td>
+                <td>
+                    {% if v.parent_version_number %}
+                    <span class="badge badge-info">{{ v.parent_version_number }}</span>
+                    {% else %}
+                    <span class="missing-indicator">初始版本</span>
+                    {% endif %}
+                </td>
+                <td>{{ v.point_count }}</td>
+                <td>{{ v.data_count }}</td>
+                <td>
+                    {% if v.review_status == 'pending' %}
+                    <span class="badge badge-warning">待审核</span>
+                    {% elif v.review_status == 'approved' %}
+                    <span class="badge badge-success">已通过</span>
+                    {% elif v.review_status == 'rejected' %}
+                    <span class="badge badge-danger">已驳回</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="/stages/{{ stage.id }}/versions/{{ v.id }}" class="btn btn-primary btn-sm">详情</a>
+                    <form action="/stages/{{ stage.id }}/versions/{{ v.id }}/delete" method="post"
+                          onsubmit="return confirm('确定删除版本 {{ v.version_number }}？此操作将同时删除所有关联快照数据。')">
+                        <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:2rem;">
+        <p style="color:var(--text-light);margin-bottom:1rem;">暂无历史版本</p>
+        <button class="btn btn-primary" onclick="document.getElementById('createVersionModal').style.display='flex'">创建第一个版本</button>
+    </div>
+    {% endif %}
+</div>
+
+<div id="createVersionModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;z-index:1000;">
+    <div class="card" style="width:90%;max-width:600px;max-height:90vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;border:none;padding:0;">创建新版本</h2>
+            <button onclick="document.getElementById('createVersionModal').style.display='none'"
+                    style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-light);">&times;</button>
+        </div>
+        <form action="/stages/{{ stage.id }}/versions/create" method="post">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>版本名称</label>
+                    <input type="text" name="version_name" placeholder="如：夏季声学测量第二轮" />
+                </div>
+                <div class="form-group">
+                    <label>创建人</label>
+                    <input type="text" name="created_by" placeholder="研究人员姓名" />
+                </div>
+            </div>
+            <div class="form-group">
+                <label>基于父版本（可选）</label>
+                <select name="parent_version_id">
+                    <option value="">-- 不基于任何版本（全新版本） --</option>
+                    {% for v in versions %}
+                    <option value="{{ v.id }}">{{ v.version_number }} - {{ v.version_name or '未命名' }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>关联测量场次（可选，将基于该场次的声学数据创建）</label>
+                <select name="session_id">
+                    <option value="">-- 使用戏台所有最新声学数据 --</option>
+                    {% for s in sessions %}
+                    <option value="{{ s.id }}">#{{ s.id }} - {{ s.singer_position }} ({{ s.created_at[:10] }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>数据来源</label>
+                <input type="text" name="data_source" placeholder="如：现场实测 / 实验室复现 / 文献补录" />
+            </div>
+            <div class="form-group">
+                <label>修改说明</label>
+                <textarea name="modification_description" rows="3"
+                    placeholder="说明本次版本的修改内容、实验条件调整等信息..."></textarea>
+            </div>
+            <div class="actions" style="justify-content:flex-end;">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('createVersionModal').style.display='none'">取消</button>
+                <button type="submit" class="btn btn-primary">创建版本</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

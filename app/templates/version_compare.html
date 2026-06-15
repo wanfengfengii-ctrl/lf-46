@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}版本对比 - {{ stage.name }}{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/stages/{{ stage.id }}/versions" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回版本列表</a>
+</div>
+
+<h1 style="color:var(--primary);margin-bottom:1.5rem;">版本对比 - {{ stage.name }}</h1>
+
+<div class="card">
+    <h2>选择对比版本</h2>
+    <form method="get" action="/stages/{{ stage.id }}/versions/compare">
+        <div class="form-row">
+            <div class="form-group">
+                <label>版本 A（基准）</label>
+                <select name="version_a" required>
+                    <option value="">-- 请选择 --</option>
+                    {% for v in versions %}
+                    <option value="{{ v.id }}" {% if version_a == v.id %}selected{% endif %}>
+                        {{ v.version_number }} - {{ v.version_name or '未命名' }} ({{ v.created_at[:10] }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>版本 B（对比）</label>
+                <select name="version_b" required>
+                    <option value="">-- 请选择 --</option>
+                    {% for v in versions %}
+                    <option value="{{ v.id }}" {% if version_b == v.id %}selected{% endif %}>
+                        {{ v.version_number }} - {{ v.version_name or '未命名' }} ({{ v.created_at[:10] }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">开始对比</button>
+    </form>
+</div>
+
+{% if result %}
+<div class="card">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem;">
+        <div style="background:rgba(74,107,138,0.1);padding:1rem;border-radius:8px;border-left:4px solid var(--info);">
+            <h3 style="color:var(--info);margin-bottom:0.5rem;">版本 A（基准）</h3>
+            <p style="font-size:1.1rem;font-weight:700;">{{ result.version_a.version_number }}
+                {% if result.version_a.version_name %} - {{ result.version_a.version_name }}{% endif %}</p>
+            <p style="font-size:0.8rem;color:var(--text-light);">
+                创建人：{{ result.version_a.created_by or '-' }} · {{ result.version_a.created_at }}
+            </p>
+            {% if result.version_a.modification_description %}
+            <p style="font-size:0.85rem;margin-top:0.5rem;">{{ result.version_a.modification_description }}</p>
+            {% endif %}
+        </div>
+        <div style="background:rgba(139,69,19,0.1);padding:1rem;border-radius:8px;border-left:4px solid var(--primary);">
+            <h3 style="color:var(--primary);margin-bottom:0.5rem;">版本 B（对比）</h3>
+            <p style="font-size:1.1rem;font-weight:700;">{{ result.version_b.version_number }}
+                {% if result.version_b.version_name %} - {{ result.version_b.version_name }}{% endif %}</p>
+            <p style="font-size:0.8rem;color:var(--text-light);">
+                创建人：{{ result.version_b.created_by or '-' }} · {{ result.version_b.created_at }}
+            </p>
+            {% if result.version_b.modification_description %}
+            <p style="font-size:0.85rem;margin-top:0.5rem;">{{ result.version_b.modification_description }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:0.8rem;margin-bottom:1.5rem;">
+        <div style="text-align:center;padding:0.8rem;border-radius:8px;background:#d4edda;">
+            <div style="font-size:1.4rem;font-weight:700;color:#155724;">{{ result.point_change_counts.added }}</div>
+            <div style="font-size:0.8rem;color:#155724;">测量点新增</div>
+        </div>
+        <div style="text-align:center;padding:0.8rem;border-radius:8px;background:#fff3cd;">
+            <div style="font-size:1.4rem;font-weight:700;color:#856404;">{{ result.point_change_counts.modified }}</div>
+            <div style="font-size:0.8rem;color:#856404;">测量点修改</div>
+        </div>
+        <div style="text-align:center;padding:0.8rem;border-radius:8px;background:#f8d7da;">
+            <div style="font-size:1.4rem;font-weight:700;color:#721c24;">{{ result.point_change_counts.removed }}</div>
+            <div style="font-size:0.8rem;color:#721c24;">测量点删除</div>
+        </div>
+        <div style="text-align:center;padding:0.8rem;border-radius:8px;background:#d4edda;">
+            <div style="font-size:1.4rem;font-weight:700;color:#155724;">{{ result.acoustic_change_counts.added }}</div>
+            <div style="font-size:0.8rem;color:#155724;">数据新增</div>
+        </div>
+        <div style="text-align:center;padding:0.8rem;border-radius:8px;background:#fff3cd;">
+            <div style="font-size:1.4rem;font-weight:700;color:#856404;">{{ result.acoustic_change_counts.modified }}</div>
+            <div style="font-size:0.8rem;color:#856404;">数据修改</div>
+        </div>
+        <div style="text-align:center;padding:0.8rem;border-radius:8px;background:#f8d7da;">
+            <div style="font-size:1.4rem;font-weight:700;color:#721c24;">{{ result.acoustic_change_counts.removed }}</div>
+            <div style="font-size:0.8rem;color:#721c24;">数据删除</div>
+        </div>
+    </div>
+
+    {% if result.conclusion_needs_review %}
+    <div class="alert alert-warning">
+        <strong>⚠️ 结论需要重新审核</strong>
+        {% if result.conclusion_changed %}
+        <p style="margin-top:0.3rem;font-size:0.9rem;">检测到两个版本的分析结论内容或确认状态发生了变化，请根据最新数据重新评估分析结论。</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<div class="tab-bar">
+    <a href="javascript:void(0)" class="active" onclick="showCmpTab(event, 'points')">测量点差异</a>
+    <a href="javascript:void(0)" onclick="showCmpTab(event, 'acoustic')">声学数据差异</a>
+    <a href="javascript:void(0)" onclick="showCmpTab(event, 'stats')">统计对比</a>
+    <a href="javascript:void(0)" onclick="showCmpTab(event, 'conclusion')">结论对比</a>
+</div>
+
+<div id="tab-points" class="cmp-tab">
+    <div class="card">
+        <h2>测量点差异</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>标签</th>
+                    <th>版本 A - X</th>
+                    <th>版本 A - Y</th>
+                    <th>版本 B - X</th>
+                    <th>版本 B - Y</th>
+                    <th>状态</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in result.point_diffs %}
+                <tr {% if d.status != 'unchanged' %}style="background:rgba(255,243,205,0.3);"{% endif %}>
+                    <td style="font-weight:600;">{{ d.label }}</td>
+                    <td>{{ '%.2f'|format(d.point_a.x) if d.point_a else '-' }}</td>
+                    <td>{{ '%.2f'|format(d.point_a.y) if d.point_a else '-' }}</td>
+                    <td>{{ '%.2f'|format(d.point_b.x) if d.point_b else '-' }}</td>
+                    <td>{{ '%.2f'|format(d.point_b.y) if d.point_b else '-' }}</td>
+                    <td>
+                        {% if d.status == 'unchanged' %}
+                        <span class="badge badge-info">未变化</span>
+                        {% elif d.status == 'modified' %}
+                        <span class="badge badge-warning">已修改</span>
+                        {% elif d.status == 'added_in_b' %}
+                        <span class="badge badge-success">B中新增</span>
+                        {% elif d.status == 'removed_in_b' %}
+                        <span class="badge badge-danger">B中删除</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="tab-acoustic" class="cmp-tab" style="display:none;">
+    <div class="card">
+        <h2>声学数据差异</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>测量点</th>
+                    <th>指标</th>
+                    <th>版本 A</th>
+                    <th>版本 B</th>
+                    <th>差异</th>
+                    <th>状态</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in result.acoustic_diffs %}
+                {% set has_data = (d.acoustic_a or d.acoustic_b) %}
+                {% set metrics = [
+                    ('sound_pressure', '声压(dB)'),
+                    ('reverberation_time', '混响时间(s)'),
+                    ('speech_clarity', 'STI')
+                ] %}
+                {% for m_key, m_name in metrics %}
+                {% set a_val = d.acoustic_a[m_key] if d.acoustic_a else none %}
+                {% set b_val = d.acoustic_b[m_key] if d.acoustic_b else none %}
+                {% if a_val is not none or b_val is not none %}
+                <tr {% if d.status != 'unchanged' %}style="background:rgba(255,243,205,0.3);"{% endif %}>
+                    <td style="font-weight:600;">{{ d.label }}</td>
+                    <td>{{ m_name }}</td>
+                    <td>{{ '%.3f'|format(a_val) if a_val is not none else '-' }}</td>
+                    <td>{{ '%.3f'|format(b_val) if b_val is not none else '-' }}</td>
+                    <td>
+                        {% if a_val is not none and b_val is not none %}
+                        {% set diff = b_val - a_val %}
+                        <span style="color:{% if diff > 0 %}var(--success){% elif diff < 0 %}var(--danger){% else %}var(--text-light){% endif %};font-weight:600;">
+                            {{ '%+.3f'|format(diff) }}
+                        </span>
+                        {% else %}
+                        <span class="missing-indicator">N/A</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if loop.first %}
+                            {% if d.status == 'unchanged' %}
+                            <span class="badge badge-info">未变化</span>
+                            {% elif d.status == 'modified' %}
+                            <span class="badge badge-warning">已修改</span>
+                            {% elif d.status == 'added_in_b' %}
+                            <span class="badge badge-success">B中新增</span>
+                            {% elif d.status == 'removed_in_b' %}
+                            <span class="badge badge-danger">B中删除</span>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="tab-stats" class="cmp-tab" style="display:none;">
+    <div class="card">
+        <h2>统计指标对比</h2>
+        {% for metric_name, metric_cn in [('sound_pressure', '声压 (dB)'), ('reverberation_time', '混响时间 (s)'), ('speech_clarity', '语言清晰度 (STI)')] %}
+        <div style="margin-bottom:2rem;">
+            <h3>{{ metric_cn }}</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>统计量</th>
+                        <th>版本 A</th>
+                        <th>版本 B</th>
+                        <th>差异 (B - A)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat_key, stat_cn in [('count', '样本数'), ('mean', '均值'), ('min', '最小值'), ('max', '最大值'), ('std', '标准差')] %}
+                    <tr>
+                        <td style="font-weight:600;">{{ stat_cn }}</td>
+                        <td>{{ result.stats_a[metric_name][stat_key] if result.stats_a.get(metric_name) else '-' }}</td>
+                        <td>{{ result.stats_b[metric_name][stat_key] if result.stats_b.get(metric_name) else '-' }}</td>
+                        <td>
+                            {% if result.stats_diff.get(metric_name) and result.stats_diff[metric_name][stat_key] is defined %}
+                            {% set diff = result.stats_diff[metric_name][stat_key] %}
+                            {% if stat_key != 'count' %}
+                            <span style="color:{% if diff > 0 %}var(--success){% elif diff < 0 %}var(--danger){% else %}var(--text-light){% endif %};font-weight:600;">
+                                {{ '%+.4f'|format(diff) }}
+                            </span>
+                            {% else %}
+                            <span style="font-weight:600;">{{ '%+d'|format(diff) }}</span>
+                            {% endif %}
+                            {% else %}
+                            <span class="missing-indicator">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div id="tab-conclusion" class="cmp-tab" style="display:none;">
+    <div class="card">
+        <h2>分析结论对比</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            <div>
+                <h3 style="color:var(--info);margin-bottom:0.5rem;">版本 A 结论</h3>
+                {% if result.conclusion_a %}
+                <div class="conclusion-card {% if result.conclusion_a.is_confirmed %}confirmed{% else %}abnormal{% endif %}">
+                    <p>{{ result.conclusion_a.content }}</p>
+                    <div style="margin-top:0.5rem;">
+                        {% if result.conclusion_a.is_confirmed %}
+                        <span class="badge badge-success">已确认</span>
+                        {% else %}
+                        <span class="badge badge-warning">待确认</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <p class="missing-indicator">版本 A 创建时未捕获结论</p>
+                {% endif %}
+            </div>
+            <div>
+                <h3 style="color:var(--primary);margin-bottom:0.5rem;">版本 B 结论</h3>
+                {% if result.conclusion_b %}
+                <div class="conclusion-card {% if result.conclusion_b.is_confirmed %}confirmed{% else %}abnormal{% endif %}">
+                    <p>{{ result.conclusion_b.content }}</p>
+                    <div style="margin-top:0.5rem;">
+                        {% if result.conclusion_b.is_confirmed %}
+                        <span class="badge badge-success">已确认</span>
+                        {% else %}
+                        <span class="badge badge-warning">待确认</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <p class="missing-indicator">版本 B 创建时未捕获结论</p>
+                {% endif %}
+            </div>
+        </div>
+        {% if result.conclusion_changed %}
+        <div class="alert alert-warning" style="margin-top:1rem;">
+            <strong>结论已发生变化</strong>：请根据最新测量数据重新评估研究结论的适用性。
+        </div>
+        {% else %}
+        <div class="alert alert-info" style="margin-top:1rem;">
+            <strong>结论一致</strong>：两个版本的分析结论未发生变化。
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+function showCmpTab(e, tabName) {
+    e.preventDefault();
+    document.querySelectorAll('.cmp-tab').forEach(function(tab) {
+        tab.style.display = 'none';
+    });
+    document.querySelectorAll('.tab-bar a').forEach(function(link) {
+        link.classList.remove('active');
+    });
+    document.getElementById('tab-' + tabName).style.display = 'block';
+    e.currentTarget.classList.add('active');
+}
+</script>
+{% endblock %}
