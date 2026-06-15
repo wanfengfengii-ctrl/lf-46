@@ -19,6 +19,10 @@
         <div class="stat-label">测量点</div>
     </div>
     <div class="stat-item">
+        <div class="stat-value">{{ tasks|length }}</div>
+        <div class="stat-label">测量任务</div>
+    </div>
+    <div class="stat-item">
         <div class="stat-value">{{ sessions|length }}</div>
         <div class="stat-label">测量场次</div>
     </div>
@@ -29,26 +33,80 @@
 </div>
 
 <div class="tab-bar">
-    <a href="/stages/{{ stage.id }}/points" class="{% if request.query_params.get('tab','') == 'points' %}active{% endif %}">测量点管理</a>
-    <a href="/stages/{{ stage.id }}#sessions" class="">测量场次</a>
+    <a href="#tasks" class="active" onclick="showStageTab('tasks')">测量任务</a>
+    <a href="/stages/{{ stage.id }}/points" class="">测量点管理</a>
+    <a href="#sessions" onclick="showStageTab('sessions')">测量场次</a>
 </div>
 
-<div id="sessions" class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
-        <h2 style="margin-bottom:0;border:none;padding:0;">测量场次</h2>
-        <a href="/stages/{{ stage.id }}/sessions/create" class="btn btn-primary btn-sm">+ 新增场次</a>
+<div id="tab-tasks" class="stage-tab">
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;border:none;padding:0;">测量任务</h2>
+            <a href="/tasks" class="btn btn-primary btn-sm">+ 新建任务</a>
+        </div>
+        {% if tasks %}
+        <table>
+            <thead>
+                <tr>
+                    <th>任务名称</th>
+                    <th>负责人</th>
+                    <th>测量日期</th>
+                    <th>状态</th>
+                    <th>设备</th>
+                    <th>场次</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tasks %}
+                <tr>
+                    <td><a href="/tasks/{{ t.id }}" style="color:var(--primary);font-weight:600;">{{ t.task_name }}</a></td>
+                    <td>{{ t.responsible_person or '-' }}</td>
+                    <td>{{ t.measurement_date or '-' }}</td>
+                    <td>
+                        {% if t.status == 'planned' %}
+                        <span class="badge badge-info">计划中</span>
+                        {% elif t.status == 'in_progress' %}
+                        <span class="badge badge-warning">进行中</span>
+                        {% elif t.status == 'completed' %}
+                        <span class="badge badge-success">已完成</span>
+                        {% else %}
+                        <span class="badge badge-danger">已取消</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ t.equipment_count }}</td>
+                    <td>{{ t.session_count }}</td>
+                    <td>
+                        <a href="/tasks/{{ t.id }}" class="btn btn-primary btn-sm">查看详情</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;padding:1rem;">暂无测量任务</p>
+        {% endif %}
     </div>
-    {% if sessions %}
-    <table>
-        <thead>
-            <tr>
-                <th>演唱位置</th>
-                <th>观众数量</th>
-                <th>门窗状态</th>
-                <th>数据条数</th>
-                <th>操作</th>
-            </tr>
-        </thead>
+</div>
+
+<div id="tab-sessions" class="stage-tab" style="display:none;">
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;border:none;padding:0;">测量场次</h2>
+            <a href="/stages/{{ stage.id }}/sessions/create" class="btn btn-primary btn-sm">+ 新增场次</a>
+        </div>
+        {% if sessions %}
+        <table>
+            <thead>
+                <tr>
+                    <th>演唱位置</th>
+                    <th>观众数量</th>
+                    <th>门窗状态</th>
+                    <th>关联任务</th>
+                    <th>数据条数</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
         <tbody>
             {% for s in sessions %}
             <tr>
@@ -61,6 +119,18 @@
                         <span class="badge badge-danger">关闭</span>
                     {% else %}
                         <span class="badge badge-warning">半开</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if s.task_id %}
+                        {% set task = tasks | selectattr('id', 'equalto', s.task_id) | first %}
+                        {% if task %}
+                        <a href="/tasks/{{ task.id }}" style="color:var(--primary);font-size:0.85rem;">{{ task.task_name }}</a>
+                        {% else %}
+                        <span class="missing-indicator">任务已删除</span>
+                        {% endif %}
+                    {% else %}
+                    <span class="missing-indicator">未关联</span>
                     {% endif %}
                 </td>
                 <td>{{ s.data_count }}</td>
@@ -126,4 +196,21 @@
     <p style="color:var(--text-light);text-align:center;">暂无分析结论</p>
     {% endif %}
 </div>
+
+<script>
+function showStageTab(tabName) {
+    document.querySelectorAll('.stage-tab').forEach(tab => {
+        tab.style.display = 'none';
+    });
+    document.querySelectorAll('.tab-bar a').forEach(link => {
+        link.classList.remove('active');
+    });
+    const tabElement = document.getElementById('tab-' + tabName);
+    if (tabElement) {
+        tabElement.style.display = 'block';
+    }
+    event.target.classList.add('active');
+    event.preventDefault();
+}
+</script>
 {% endblock %}

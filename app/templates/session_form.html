@@ -33,6 +33,19 @@
             </select>
         </div>
         <div class="form-group">
+            <label>关联任务</label>
+            <select name="task_id">
+                <option value="">不关联任务</option>
+                {% if tasks %}
+                {% for t in tasks %}
+                <option value="{{ t.id }}" {% if selected_task_id and selected_task_id == t.id %}selected{% endif %}>
+                    {{ t.task_name }} ({{ t.measurement_date or '未设置日期' }})
+                </option>
+                {% endfor %}
+                {% endif %}
+            </select>
+        </div>
+        <div class="form-group">
             <label>备注</label>
             <textarea name="notes" rows="2" placeholder="测量环境补充说明"></textarea>
         </div>

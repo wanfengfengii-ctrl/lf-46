@@ -16,6 +16,11 @@
                 {% elif session.door_window_state == 'closed' %}关闭
                 {% else %}半开{% endif %}
             </span>
+            {% if task %}
+            <span class="condition-tag" style="background:#E8D5B7;color:#6B3410;">
+                任务: <a href="/tasks/{{ task.id }}" style="color:#6B3410;text-decoration:none;">{{ task.task_name }}</a>
+            </span>
+            {% endif %}
         </div>
     </div>
     <div class="actions">

@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% block title %}设备管理 - 古戏台声学分析系统{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+    <h1 style="color:var(--primary);">设备管理</h1>
+    <button class="btn btn-primary" onclick="document.getElementById('create-equipment-form').style.display='block'">+ 添加设备</button>
+</div>
+
+{% if warnings %}
+<div class="alert alert-warning">
+    <strong>⚠️ 校准提醒：</strong>以下设备校准即将到期或已过期：
+    <ul style="margin-top:0.5rem;margin-bottom:0;">
+        {% for w in warnings %}
+        <li>
+            <strong>{{ w.name }}</strong> ({{ w.type }})
+            {% if w.days_remaining < 0 %}
+            <span class="badge badge-danger">已过期 {{ -w.days_remaining | int }} 天</span>
+            {% else %}
+            <span class="badge badge-warning">剩余 {{ w.days_remaining | int }} 天</span>
+            {% endif %}
+            - 下次校准：{{ w.next_calibration_date }}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div id="create-equipment-form" class="card" style="display:none;">
+    <h2>添加设备</h2>
+    <form action="/equipment/create" method="post">
+        <div class="form-row">
+            <div class="form-group">
+                <label>设备名称 *</label>
+                <input type="text" name="name" required placeholder="如：声级计A">
+            </div>
+            <div class="form-group">
+                <label>设备类型 *</label>
+                <select name="type" required>
+                    {% for t in equipment_types %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>型号</label>
+                <input type="text" name="model" placeholder="如：BK 2250">
+            </div>
+            <div class="form-group">
+                <label>序列号</label>
+                <input type="text" name="serial_number" placeholder="设备出厂序列号">
+            </div>
+            <div class="form-group">
+                <label>状态</label>
+                <select name="status">
+                    <option value="available">可用</option>
+                    <option value="in_use">使用中</option>
+                    <option value="maintenance">维护中</option>
+                    <option value="retired">已报废</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>校准周期 (天)</label>
+                <input type="number" name="calibration_interval_days" value="365" min="1">
+            </div>
+            <div class="form-group">
+                <label>上次校准日期</label>
+                <input type="date" name="last_calibration_date">
+            </div>
+            <div class="form-group">
+                <label>下次校准日期</label>
+                <input type="date" name="next_calibration_date">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>备注</label>
+            <textarea name="notes" rows="2" placeholder="设备使用说明、注意事项等"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">添加设备</button>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('create-equipment-form').style.display='none'">取消</button>
+    </form>
+</div>
+
+{% if equipment %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>设备名称</th>
+                <th>类型</th>
+                <th>型号</th>
+                <th>序列号</th>
+                <th>状态</th>
+                <th>上次校准</th>
+                <th>校准结果</th>
+                <th>下次校准</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in equipment %}
+            <tr>
+                <td><strong style="color:var(--primary);">{{ e.name }}</strong></td>
+                <td>{{ e.type }}</td>
+                <td>{{ e.model or '-' }}</td>
+                <td>{{ e.serial_number or '-' }}</td>
+                <td>
+                    {% if e.status == 'available' %}
+                    <span class="badge badge-success">可用</span>
+                    {% elif e.status == 'in_use' %}
+                    <span class="badge badge-warning">使用中</span>
+                    {% elif e.status == 'maintenance' %}
+                    <span class="badge badge-danger">维护中</span>
+                    {% elif e.status == 'retired' %}
+                    <span class="badge badge-info">已报废</span>
+                    {% else %}
+                    <span class="badge badge-info">{{ e.status }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ e.last_cal_date or '-' }}</td>
+                <td>
+                    {% if e.last_cal_result == '合格' %}
+                    <span class="badge badge-success">合格</span>
+                    {% elif e.last_cal_result == '不合格' %}
+                    <span class="badge badge-danger">不合格</span>
+                    {% elif e.last_cal_result == '待确认' %}
+                    <span class="badge badge-warning">待确认</span>
+                    {% else %}
+                    <span class="missing-indicator">无记录</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if e.next_calibration_date %}
+                        {% if e.days_remaining is not none %}
+                            {% if e.days_remaining < 0 %}
+                            <span class="badge badge-danger">已过期 {{ -e.days_remaining | int }} 天</span>
+                            {% elif e.days_remaining <= 30 %}
+                            <span class="badge badge-warning">剩余 {{ e.days_remaining | int }} 天</span>
+                            {% else %}
+                            {{ e.next_calibration_date }}
+                            {% endif %}
+                        {% else %}
+                        {{ e.next_calibration_date }}
+                        {% endif %}
+                    {% else %}
+                    <span class="missing-indicator">未设置</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="/equipment/{{ e.id }}/calibrations" class="btn btn-primary btn-sm">校准记录</a>
+                    <button class="btn btn-outline btn-sm" onclick="toggleEditForm({{ e.id }})">编辑</button>
+                    <form action="/equipment/{{ e.id }}/delete" method="post" onsubmit="return confirm('确定删除该设备？所有校准记录将被清除。')" style="display:inline;">
+                        <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                    </form>
+                </td>
+            </tr>
+            <tr id="edit-form-{{ e.id }}" style="display:none;">
+                <td colspan="9" style="padding:1rem;background:rgba(212,165,116,0.05);">
+                    <form action="/equipment/{{ e.id }}/update" method="post">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>设备名称 *</label>
+                                <input type="text" name="name" required value="{{ e.name }}">
+                            </div>
+                            <div class="form-group">
+                                <label>设备类型 *</label>
+                                <select name="type" required>
+                                    {% for t in equipment_types %}
+                                    <option value="{{ t }}" {% if e.type == t %}selected{% endif %}>{{ t }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>型号</label>
+                                <input type="text" name="model" value="{{ e.model or '' }}">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>序列号</label>
+                                <input type="text" name="serial_number" value="{{ e.serial_number or '' }}">
+                            </div>
+                            <div class="form-group">
+                                <label>状态</label>
+                                <select name="status">
+                                    <option value="available" {% if e.status == 'available' %}selected{% endif %}>可用</option>
+                                    <option value="in_use" {% if e.status == 'in_use' %}selected{% endif %}>使用中</option>
+                                    <option value="maintenance" {% if e.status == 'maintenance' %}selected{% endif %}>维护中</option>
+                                    <option value="retired" {% if e.status == 'retired' %}selected{% endif %}>已报废</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>校准周期 (天)</label>
+                                <input type="number" name="calibration_interval_days" value="{{ e.calibration_interval_days }}" min="1">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>上次校准日期</label>
+                                <input type="date" name="last_calibration_date" value="{{ e.last_calibration_date or '' }}">
+                            </div>
+                            <div class="form-group">
+                                <label>下次校准日期</label>
+                                <input type="date" name="next_calibration_date" value="{{ e.next_calibration_date or '' }}">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>备注</label>
+                            <textarea name="notes" rows="2">{{ e.notes or '' }}</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="toggleEditForm({{ e.id }})">取消</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:3rem;">
+    <p style="color:var(--text-light);font-size:1.1rem;margin-bottom:1rem;">尚无设备记录</p>
+    <button class="btn btn-primary" onclick="document.getElementById('create-equipment-form').style.display='block'">添加第一台设备</button>
+</div>
+{% endif %}
+
+<script>
+function toggleEditForm(id) {
+    const form = document.getElementById('edit-form-' + id);
+    form.style.display = form.style.display === 'none' ? 'table-row' : 'none';
+}
+</script>
+
+{% endblock %}

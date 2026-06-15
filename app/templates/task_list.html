@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}测量任务管理 - 古戏台声学分析系统{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+    <h1 style="color:var(--primary);">测量任务管理</h1>
+    <button class="btn btn-primary" onclick="document.getElementById('create-task-form').style.display='block'">+ 新建测量任务</button>
+</div>
+
+{% if warnings %}
+<div class="alert alert-warning">
+    <strong>⚠️ 设备校准提醒：</strong>有 {{ warnings|length }} 台设备校准即将到期或已过期，请及时处理。
+    <a href="/equipment" class="btn btn-warning btn-sm" style="margin-left:1rem;">查看设备</a>
+</div>
+{% endif %}
+
+<div id="create-task-form" class="card" style="display:none;">
+    <h2>创建测量任务</h2>
+    <form action="/tasks/create" method="post">
+        <div class="form-row">
+            <div class="form-group">
+                <label>任务名称 *</label>
+                <input type="text" name="task_name" required placeholder="如：万安戏台春季声学测量">
+            </div>
+            <div class="form-group">
+                <label>关联戏台 *</label>
+                <select name="stage_id" required>
+                    {% for s in stages %}
+                    <option value="{{ s.id }}">{{ s.name }} ({{ s.location }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>负责人</label>
+                <input type="text" name="responsible_person" placeholder="如：张三">
+            </div>
+            <div class="form-group">
+                <label>测量日期</label>
+                <input type="date" name="measurement_date" value="{{ today }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>采样开始时间</label>
+                <input type="time" name="sampling_start_time">
+            </div>
+            <div class="form-group">
+                <label>采样结束时间</label>
+                <input type="time" name="sampling_end_time">
+            </div>
+            <div class="form-group">
+                <label>任务状态</label>
+                <select name="status">
+                    <option value="planned">计划中</option>
+                    <option value="in_progress">进行中</option>
+                    <option value="completed">已完成</option>
+                    <option value="cancelled">已取消</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>现场备注</label>
+            <textarea name="site_notes" rows="2" placeholder="测量准备事项、特殊要求等"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">创建任务</button>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('create-task-form').style.display='none'">取消</button>
+    </form>
+</div>
+
+{% if tasks %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>任务名称</th>
+                <th>戏台</th>
+                <th>负责人</th>
+                <th>测量日期</th>
+                <th>状态</th>
+                <th>设备</th>
+                <th>场次</th>
+                <th>记录</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in tasks %}
+            <tr>
+                <td><a href="/tasks/{{ task.id }}" style="color:var(--primary);font-weight:600;">{{ task.task_name }}</a></td>
+                <td>{{ task.stage_name }}</td>
+                <td>{{ task.responsible_person or '-' }}</td>
+                <td>{{ task.measurement_date or '-' }}</td>
+                <td>
+                    {% if task.status == 'planned' %}
+                    <span class="badge badge-info">计划中</span>
+                    {% elif task.status == 'in_progress' %}
+                    <span class="badge badge-warning">进行中</span>
+                    {% elif task.status == 'completed' %}
+                    <span class="badge badge-success">已完成</span>
+                    {% else %}
+                    <span class="badge badge-danger">已取消</span>
+                    {% endif %}
+                </td>
+                <td>{{ task.equipment_count }}</td>
+                <td>{{ task.session_count }}</td>
+                <td>{{ task.record_count }}</td>
+                <td class="actions">
+                    <a href="/tasks/{{ task.id }}" class="btn btn-primary btn-sm">查看详情</a>
+                    <form action="/tasks/{{ task.id }}/delete" method="post" onsubmit="return confirm('确定删除该任务？所有关联数据将被清除。')">
+                        <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:3rem;">
+    <p style="color:var(--text-light);font-size:1.1rem;margin-bottom:1rem;">尚无测量任务</p>
+    <button class="btn btn-primary" onclick="document.getElementById('create-task-form').style.display='block'">创建第一个任务</button>
+</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}{{ equipment.name }} - 校准记录{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
+    <div>
+        <h1 style="color:var(--primary);margin-bottom:0.5rem;">{{ equipment.name }}</h1>
+        <div style="color:var(--text-light);">
+            类型：{{ equipment.type }}
+            {% if equipment.model %}
+            · 型号：{{ equipment.model }}
+            {% endif %}
+            {% if equipment.serial_number %}
+            · 序列号：{{ equipment.serial_number }}
+            {% endif %}
+        </div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary" onclick="document.getElementById('add-calibration-form').style.display='block'">+ 添加校准记录</button>
+        <a href="/equipment" class="btn btn-outline">返回设备列表</a>
+    </div>
+</div>
+
+<div class="card">
+    <h3>设备信息</h3>
+    <div class="stat-grid">
+        <div class="stat-item">
+            <div class="stat-value">
+                {% if equipment.status == 'available' %}
+                <span style="color:var(--success);">可用</span>
+                {% elif equipment.status == 'in_use' %}
+                <span style="color:var(--warning);">使用中</span>
+                {% elif equipment.status == 'maintenance' %}
+                <span style="color:var(--danger);">维护中</span>
+                {% else %}
+                <span style="color:var(--info);">{{ equipment.status }}</span>
+                {% endif %}
+            </div>
+            <div class="stat-label">当前状态</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">{{ equipment.calibration_interval_days }}</div>
+            <div class="stat-label">校准周期 (天)</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" style="font-size:1.1rem;">{{ equipment.last_calibration_date or '未记录' }}</div>
+            <div class="stat-label">上次校准日期</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" style="font-size:1.1rem;{% if equipment.next_calibration_date and equipment.next_calibration_date < today %}color:var(--danger);{% endif %}">
+                {{ equipment.next_calibration_date or '未设置' }}
+            </div>
+            <div class="stat-label">下次校准日期</div>
+        </div>
+    </div>
+    {% if equipment.notes %}
+    <div style="margin-top:1rem;padding:1rem;background:rgba(212,165,116,0.05);border-radius:8px;">
+        <strong style="color:var(--primary);">备注：</strong>{{ equipment.notes }}
+    </div>
+    {% endif %}
+</div>
+
+<div id="add-calibration-form" class="card" style="display:none;">
+    <h2>添加校准记录</h2>
+    <form action="/equipment/{{ equipment.id }}/calibrations/create" method="post">
+        <div class="form-row">
+            <div class="form-group">
+                <label>校准日期 *</label>
+                <input type="date" name="calibration_date" required value="{{ today }}">
+            </div>
+            <div class="form-group">
+                <label>校准结果 *</label>
+                <select name="calibration_result" required>
+                    {% for r in calibration_results %}
+                    <option value="{{ r }}">{{ r }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>校准值</label>
+                <input type="number" name="calibration_value" step="0.001" placeholder="校准读数/偏差值">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>校准人员</label>
+                <input type="text" name="calibrated_by" placeholder="执行校准的人员">
+            </div>
+            <div class="form-group">
+                <label>证书编号</label>
+                <input type="text" name="certificate_number" placeholder="校准证书编号">
+            </div>
+            <div class="form-group">
+                <label>下次校准日期</label>
+                <input type="date" name="next_calibration_date">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>校准说明</label>
+            <textarea name="notes" rows="2" placeholder="校准过程、发现的问题、处理方式等"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">保存记录</button>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('add-calibration-form').style.display='none'">取消</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>校准历史记录</h2>
+    {% if calibrations %}
+    <table>
+        <thead>
+            <tr>
+                <th>校准日期</th>
+                <th>结果</th>
+                <th>校准值</th>
+                <th>校准人员</th>
+                <th>证书编号</th>
+                <th>下次校准</th>
+                <th>说明</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cal in calibrations %}
+            <tr>
+                <td><strong>{{ cal.calibration_date }}</strong></td>
+                <td>
+                    {% if cal.calibration_result == '合格' %}
+                    <span class="badge badge-success">合格</span>
+                    {% elif cal.calibration_result == '不合格' %}
+                    <span class="badge badge-danger">不合格</span>
+                    {% else %}
+                    <span class="badge badge-warning">待确认</span>
+                    {% endif %}
+                </td>
+                <td>{{ cal.calibration_value if cal.calibration_value is not none else '-' }}</td>
+                <td>{{ cal.calibrated_by or '-' }}</td>
+                <td>{{ cal.certificate_number or '-' }}</td>
+                <td>{{ cal.next_calibration_date or '-' }}</td>
+                <td>{{ cal.notes or '-' }}</td>
+                <td>
+                    <form action="/equipment/calibrations/{{ cal.id }}/delete" method="post" onsubmit="return confirm('确定删除该校准记录？')">
+                        <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:2rem;color:var(--text-light);">
+        尚无校准记录，请添加第一条校准记录
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

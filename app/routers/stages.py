@@ -61,9 +61,19 @@ def stage_detail(request: Request, stage_id: int, db=Depends(get_db)):
     cursor.execute("SELECT * FROM conclusions WHERE stage_id = ? ORDER BY created_at DESC", (stage_id,))
     conclusions = [dict(row) for row in cursor.fetchall()]
 
+    cursor.execute("""
+        SELECT mt.*,
+               (SELECT COUNT(*) FROM task_equipment te WHERE te.task_id = mt.id) as equipment_count,
+               (SELECT COUNT(*) FROM measurement_sessions ms WHERE ms.task_id = mt.id) as session_count
+        FROM measurement_tasks mt
+        WHERE mt.stage_id = ?
+        ORDER BY mt.created_at DESC
+    """, (stage_id,))
+    tasks = [dict(row) for row in cursor.fetchall()]
+
     return templates.TemplateResponse("stage_detail.html", {
         "request": request, "stage": stage, "points": points,
-        "sessions": sessions, "conclusions": conclusions,
+        "sessions": sessions, "conclusions": conclusions, "tasks": tasks,
     })
 
 

@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% block title %}{{ task.task_name }} - 任务详情{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
+    <div>
+        <h1 style="color:var(--primary);margin-bottom:0.5rem;">{{ task.task_name }}</h1>
+        <div style="color:var(--text-light);">
+            戏台：<a href="/stages/{{ stage.id }}" style="color:var(--primary);">{{ stage.name }}</a>
+            {% if task.measurement_date %}
+            · 测量日期：{{ task.measurement_date }}
+            {% endif %}
+            {% if task.responsible_person %}
+            · 负责人：{{ task.responsible_person }}
+            {% endif %}
+        </div>
+    </div>
+    <div class="actions">
+        <button class="btn btn-outline" onclick="document.getElementById('edit-task-form').style.display='block'">编辑任务</button>
+        <form action="/tasks/{{ task.id }}/delete" method="post" onsubmit="return confirm('确定删除该任务？所有关联数据将被清除。')">
+            <button type="submit" class="btn btn-danger">删除任务</button>
+        </form>
+        <a href="/tasks" class="btn btn-outline">返回列表</a>
+    </div>
+</div>
+
+<div id="edit-task-form" class="card" style="display:none;">
+    <h2>编辑任务信息</h2>
+    <form action="/tasks/{{ task.id }}/update" method="post">
+        <div class="form-row">
+            <div class="form-group">
+                <label>任务名称 *</label>
+                <input type="text" name="task_name" required value="{{ task.task_name }}">
+            </div>
+            <div class="form-group">
+                <label>负责人</label>
+                <input type="text" name="responsible_person" value="{{ task.responsible_person or '' }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>测量日期</label>
+                <input type="date" name="measurement_date" value="{{ task.measurement_date or today }}">
+            </div>
+            <div class="form-group">
+                <label>采样开始时间</label>
+                <input type="time" name="sampling_start_time" value="{{ task.sampling_start_time or '' }}">
+            </div>
+            <div class="form-group">
+                <label>采样结束时间</label>
+                <input type="time" name="sampling_end_time" value="{{ task.sampling_end_time or '' }}">
+            </div>
+            <div class="form-group">
+                <label>任务状态</label>
+                <select name="status">
+                    {% for s in task_statuses %}
+                    <option value="{{ s }}" {% if task.status == s %}selected{% endif %}>
+                        {% if s == 'planned' %}计划中
+                        {% elif s == 'in_progress' %}进行中
+                        {% elif s == 'completed' %}已完成
+                        {% else %}已取消{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>现场备注</label>
+            <textarea name="site_notes" rows="2">{{ task.site_notes or '' }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">保存修改</button>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('edit-task-form').style.display='none'">取消</button>
+    </form>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-item">
+        <div class="stat-value">{{ task_equipment|length }}</div>
+        <div class="stat-label">已分配设备</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ sessions|length }}</div>
+        <div class="stat-label">关联场次</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ execution_records|length }}</div>
+        <div class="stat-label">执行记录</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ photos|length }}</div>
+        <div class="stat-label">现场照片</div>
+    </div>
+</div>
+
+<div class="tab-bar">
+    <a href="#equipment" class="active" onclick="showTab('equipment')">设备清单</a>
+    <a href="#sessions" onclick="showTab('sessions')">测量场次</a>
+    <a href="#execution" onclick="showTab('execution')">执行记录</a>
+    <a href="#photos" onclick="showTab('photos')">现场照片</a>
+</div>
+
+<div id="tab-equipment" class="tab-content">
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;">设备清单</h2>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-equipment-form').style.display='block'">+ 添加设备</button>
+        </div>
+
+        <div id="add-equipment-form" style="display:none;margin-bottom:1rem;padding:1rem;background:rgba(212,165,116,0.1);border-radius:8px;">
+            <form action="/tasks/{{ task.id }}/equipment/add" method="post">
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <select name="equipment_id" required style="margin-bottom:0;">
+                            {% if available_equipment %}
+                            {% for e in available_equipment %}
+                            <option value="{{ e.id }}">{{ e.name }} ({{ e.type }})</option>
+                            {% endfor %}
+                            {% else %}
+                            <option value="" disabled>暂无可分配设备</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button type="submit" class="btn btn-primary btn-sm" {% if not available_equipment %}disabled{% endif %}>添加</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('add-equipment-form').style.display='none'">取消</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        {% if task_equipment %}
+        <table>
+            <thead>
+                <tr>
+                    <th>设备名称</th>
+                    <th>类型</th>
+                    <th>型号</th>
+                    <th>状态</th>
+                    <th>上次校准</th>
+                    <th>下次校准</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in task_equipment %}
+                <tr>
+                    <td><a href="/equipment/{{ e.id }}/calibrations" style="color:var(--primary);">{{ e.name }}</a></td>
+                    <td>{{ e.type }}</td>
+                    <td>{{ e.model or '-' }}</td>
+                    <td>
+                        {% if e.status == 'available' %}
+                        <span class="badge badge-success">可用</span>
+                        {% elif e.status == 'in_use' %}
+                        <span class="badge badge-warning">使用中</span>
+                        {% elif e.status == 'maintenance' %}
+                        <span class="badge badge-danger">维护中</span>
+                        {% else %}
+                        <span class="badge badge-info">{{ e.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ e.last_calibration_date or '-' }}</td>
+                    <td>
+                        {% if e.next_calibration_date %}
+                        {% set days_remaining = (e.next_calibration_date | string) | to_datetime - now %}
+                        {% if e.next_calibration_date < today %}
+                        <span class="badge badge-danger">已过期</span>
+                        {% elif (e.next_calibration_date | string) <= (today | string) %}
+                        <span class="badge badge-danger">已过期</span>
+                        {% else %}
+                        {{ e.next_calibration_date }}
+                        {% endif %}
+                        {% else %}
+                        <span class="missing-indicator">未设置</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form action="/tasks/{{ task.id }}/equipment/{{ e.id }}/remove" method="post" onsubmit="return confirm('确定从任务中移除此设备？')">
+                            <button type="submit" class="btn btn-danger btn-sm">移除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align:center;padding:2rem;color:var(--text-light);">
+            尚未分配设备，请先添加设备到任务中
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-sessions" class="tab-content" style="display:none;">
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;">关联测量场次</h2>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('link-session-form').style.display='block'">+ 关联场次</button>
+        </div>
+
+        <div id="link-session-form" style="display:none;margin-bottom:1rem;padding:1rem;background:rgba(212,165,116,0.1);border-radius:8px;">
+            <form action="/tasks/{{ task.id }}/session/link" method="post">
+                <div class="form-row">
+                    <div class="form-group" style="margin-bottom:0;">
+                        <select name="session_id" required style="margin-bottom:0;">
+                            {% if available_sessions %}
+                            {% for s in available_sessions %}
+                            <option value="{{ s.id }}">#{{ s.id }} - {{ s.singer_position }} - {{ s.created_at[:10] }}</option>
+                            {% endfor %}
+                            {% else %}
+                            <option value="" disabled>暂无可关联场次</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button type="submit" class="btn btn-primary btn-sm" {% if not available_sessions %}disabled{% endif %}>关联</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('link-session-form').style.display='none'">取消</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        {% if sessions %}
+        <table>
+            <thead>
+                <tr>
+                    <th>场次ID</th>
+                    <th>歌手位置</th>
+                    <th>观众人数</th>
+                    <th>门窗状态</th>
+                    <th>数据量</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td><a href="/stages/{{ stage.id }}/sessions/{{ s.id }}" style="color:var(--primary);">#{{ s.id }}</a></td>
+                    <td>{{ s.singer_position }}</td>
+                    <td>{{ s.audience_count }}</td>
+                    <td>
+                        {% if s.door_window_state == 'closed' %}
+                        <span class="badge badge-info">关闭</span>
+                        {% else %}
+                        <span class="badge badge-warning">开启</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ s.data_count }}</td>
+                    <td>{{ s.created_at[:16] }}</td>
+                    <td>
+                        <form action="/tasks/{{ task.id }}/session/{{ s.id }}/unlink" method="post" onsubmit="return confirm('确定取消该场次与任务的关联？')">
+                            <button type="submit" class="btn btn-danger btn-sm">取消关联</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="text-align:center;padding:2rem;color:var(--text-light);">
+            尚未关联测量场次
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-execution" class="tab-content" style="display:none;">
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;">执行记录</h2>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('add-execution-form').style.display='block'">+ 添加记录</button>
+        </div>
+
+        <div id="add-execution-form" class="card" style="display:none;">
+            <h3>添加执行记录</h3>
+            <form action="/tasks/{{ task.id }}/execution/create" method="post">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>执行日期</label>
+                        <input type="date" name="execution_date" value="{{ today }}">
+                    </div>
+                    <div class="form-group">
+                        <label>天气状况</label>
+                        <input type="text" name="weather_condition" placeholder="如：晴、多云、小雨等">
+                    </div>
+                    <div class="form-group">
+                        <label>执行人员</label>
+                        <input type="text" name="executor" placeholder="如：张三、李四">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>环境噪声 (dB)</label>
+                        <input type="number" name="ambient_noise_level" step="0.1" placeholder="如：45.5">
+                    </div>
+                    <div class="form-group">
+                        <label>温度 (°C)</label>
+                        <input type="number" name="temperature" step="0.1" placeholder="如：22.5">
+                    </div>
+                    <div class="form-group">
+                        <label>湿度 (%)</label>
+                        <input type="number" name="humidity" step="0.1" min="0" max="100" placeholder="如：60">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>环境说明</label>
+                    <textarea name="environment_notes" rows="2" placeholder="现场环境描述、异常情况说明等"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">保存记录</button>
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('add-execution-form').style.display='none'">取消</button>
+            </form>
+        </div>
+
+        {% if execution_records %}
+        <div style="display:grid;gap:1rem;">
+            {% for r in execution_records %}
+            <div class="conclusion-card" style="background:rgba(212,165,116,0.05);padding:1rem;border-radius:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:0.5rem;">
+                    <div>
+                        <strong style="color:var(--primary);">执行记录 #{{ loop.revindex }}</strong>
+                        {% if r.execution_date %}
+                        <span style="color:var(--text-light);margin-left:1rem;">日期：{{ r.execution_date }}</span>
+                        {% endif %}
+                        {% if r.executor %}
+                        <span style="color:var(--text-light);margin-left:1rem;">执行：{{ r.executor }}</span>
+                        {% endif %}
+                    </div>
+                    <span style="color:var(--text-light);font-size:0.8rem;">{{ r.created_at[:16] }}</span>
+                </div>
+                <div class="session-condition" style="margin-top:0.5rem;">
+                    {% if r.weather_condition %}
+                    <span class="condition-tag condition-singer">天气：{{ r.weather_condition }}</span>
+                    {% endif %}
+                    {% if r.ambient_noise_level is not none %}
+                    <span class="condition-tag condition-audience">噪声：{{ r.ambient_noise_level }} dB</span>
+                    {% endif %}
+                    {% if r.temperature is not none %}
+                    <span class="condition-tag condition-door">温度：{{ r.temperature }}°C</span>
+                    {% endif %}
+                    {% if r.humidity is not none %}
+                    <span class="condition-tag condition-singer">湿度：{{ r.humidity }}%</span>
+                    {% endif %}
+                </div>
+                {% if r.environment_notes %}
+                <p style="margin-top:0.5rem;color:var(--text);">{{ r.environment_notes }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:2rem;color:var(--text-light);">
+            尚无执行记录
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-photos" class="tab-content" style="display:none;">
+    <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h2 style="margin-bottom:0;">现场照片</h2>
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('upload-photo-form').style.display='block'">+ 上传照片</button>
+        </div>
+
+        <div id="upload-photo-form" class="card" style="display:none;">
+            <h3>上传现场照片</h3>
+            <form action="/tasks/{{ task.id }}/photos/upload" method="post" enctype="multipart/form-data">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>选择照片 *</label>
+                        <input type="file" name="photo" accept="image/*" required>
+                    </div>
+                    <div class="form-group">
+                        <label>照片描述</label>
+                        <input type="text" name="photo_description" placeholder="如：戏台全景、设备布置等">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">上传</button>
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('upload-photo-form').style.display='none'">取消</button>
+            </form>
+        </div>
+
+        {% if photos %}
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1rem;">
+            {% for p in photos %}
+            <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                <div style="aspect-ratio:4/3;overflow:hidden;background:#f5f5f5;">
+                    <img src="{{ p.photo_path }}" alt="{{ p.photo_description or '现场照片' }}" style="width:100%;height:100%;object-fit:cover;">
+                </div>
+                <div style="padding:0.8rem;">
+                    {% if p.photo_description %}
+                    <p style="font-size:0.9rem;margin-bottom:0.5rem;">{{ p.photo_description }}</p>
+                    {% endif %}
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:0.8rem;color:var(--text-light);">{{ p.uploaded_at[:16] }}</span>
+                        <form action="/tasks/{{ task.id }}/photos/{{ p.id }}/delete" method="post" onsubmit="return confirm('确定删除该照片？')">
+                            <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:2rem;color:var(--text-light);">
+            尚未上传现场照片
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function showTab(tabName) {
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.style.display = 'none';
+    });
+    document.querySelectorAll('.tab-bar a').forEach(link => {
+        link.classList.remove('active');
+    });
+    document.getElementById('tab-' + tabName).style.display = 'block';
+    event.target.classList.add('active');
+}
+</script>
+
+{% endblock %}
