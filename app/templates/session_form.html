@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}新建测量场次 - {{ stage.name }}{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/stages/{{ stage.id }}" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回{{ stage.name }}</a>
+</div>
+
+<h1 style="color:var(--primary);margin-bottom:1.5rem;">新建测量场次 - {{ stage.name }}</h1>
+
+<div class="card" style="max-width:600px;">
+    <h2>测量条件设置</h2>
+    <form action="/stages/{{ stage.id }}/sessions/create" method="post">
+        <div class="form-group">
+            <label>演唱位置 *</label>
+            <select name="singer_position">
+                <option value="舞台中央">舞台中央</option>
+                <option value="舞台左侧">舞台左侧</option>
+                <option value="舞台右侧">舞台右侧</option>
+                <option value="舞台前部">舞台前部</option>
+                <option value="舞台后部">舞台后部</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>观众数量</label>
+            <input type="number" name="audience_count" value="0" min="0" placeholder="0表示空场">
+        </div>
+        <div class="form-group">
+            <label>门窗状态</label>
+            <select name="door_window_state">
+                <option value="closed">关闭</option>
+                <option value="open">开启</option>
+                <option value="partial">半开</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>备注</label>
+            <textarea name="notes" rows="2" placeholder="测量环境补充说明"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">创建场次</button>
+        <a href="/stages/{{ stage.id }}" class="btn btn-outline">取消</a>
+    </form>
+</div>
+{% endblock %}

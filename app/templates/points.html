@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}测量点管理 - {{ stage.name }}{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/stages/{{ stage.id }}" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回{{ stage.name }}</a>
+</div>
+
+<h1 style="color:var(--primary);margin-bottom:1rem;">测量点管理 - {{ stage.name }}</h1>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+    <div>
+        <div class="card">
+            <h2>平面座位图</h2>
+            <div class="plan-canvas" id="plan-canvas" style="height:400px;">
+                <div class="stage-area" style="width:40%;height:15%;">
+                    舞台
+                </div>
+                {% for p in points %}
+                <div class="point-marker" style="left:{{ (p.x / stage.plan_width * 100) }}%;top:{{ (p.y / stage.plan_height * 100) }}%;"
+                     title="{{ p.label }} ({{ p.x }}, {{ p.y }})">
+                    {{ loop.index }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>添加测量点</h2>
+            <form action="/stages/{{ stage.id }}/points/create" method="post">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>标签 *</label>
+                        <input type="text" name="label" required placeholder="如：A1">
+                    </div>
+                    <div class="form-group">
+                        <label>X 坐标 (米) *</label>
+                        <input type="number" name="x" required step="0.1" min="0" max="{{ stage.plan_width }}">
+                    </div>
+                    <div class="form-group">
+                        <label>Y 坐标 (米) *</label>
+                        <input type="number" name="y" required step="0.1" min="0" max="{{ stage.plan_height }}">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">添加测量点</button>
+            </form>
+        </div>
+    </div>
+
+    <div>
+        <div class="card">
+            <h2>已有测量点 ({{ points|length }})</h2>
+            {% if points %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>标签</th>
+                        <th>X</th>
+                        <th>Y</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in points %}
+                    <tr>
+                        <td id="label-{{ p.id }}">{{ p.label }}</td>
+                        <td id="x-{{ p.id }}">{{ p.x }}</td>
+                        <td id="y-{{ p.id }}">{{ p.y }}</td>
+                        <td class="actions">
+                            <button class="btn btn-warning btn-sm" onclick="editPoint({{ p.id }}, '{{ p.label }}', {{ p.x }}, {{ p.y }})">编辑</button>
+                            <form action="/stages/{{ stage.id }}/points/{{ p.id }}/delete" method="post" onsubmit="return confirm('确定删除该测量点？关联的声学数据也将被删除。')">
+                                <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color:var(--text-light);text-align:center;padding:1rem;">暂无测量点</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="edit-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;">
+    <div class="card" style="width:400px;margin:auto;margin-top:15vh;">
+        <h2>编辑测量点</h2>
+        <form id="edit-form" method="post">
+            <div class="form-group">
+                <label>标签 *</label>
+                <input type="text" id="edit-label" name="label" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>X 坐标 *</label>
+                    <input type="number" id="edit-x" name="x" required step="0.1" min="0" max="{{ stage.plan_width }}">
+                </div>
+                <div class="form-group">
+                    <label>Y 坐标 *</label>
+                    <input type="number" id="edit-y" name="y" required step="0.1" min="0" max="{{ stage.plan_height }}">
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">保存修改</button>
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('edit-modal').style.display='none'">取消</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function editPoint(id, label, x, y) {
+    document.getElementById('edit-label').value = label;
+    document.getElementById('edit-x').value = x;
+    document.getElementById('edit-y').value = y;
+    document.getElementById('edit-form').action = '/stages/{{ stage.id }}/points/' + id + '/edit';
+    document.getElementById('edit-modal').style.display = 'flex';
+}
+</script>
+{% endblock %}

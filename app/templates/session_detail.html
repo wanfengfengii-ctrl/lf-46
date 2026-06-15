@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}测量数据 - {{ session.singer_position }} - {{ stage.name }}{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/stages/{{ stage.id }}" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回{{ stage.name }}</a>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">
+    <div>
+        <h1 style="color:var(--primary);margin-bottom:0.3rem;">测量数据录入</h1>
+        <div class="session-condition">
+            <span class="condition-tag condition-singer">演唱位置: {{ session.singer_position }}</span>
+            <span class="condition-tag condition-audience">观众: {{ session.audience_count }}人</span>
+            <span class="condition-tag condition-door">门窗:
+                {% if session.door_window_state == 'open' %}开启
+                {% elif session.door_window_state == 'closed' %}关闭
+                {% else %}半开{% endif %}
+            </span>
+        </div>
+    </div>
+    <div class="actions">
+        <a href="/stages/{{ stage.id }}/heatmap/{{ session.id }}" class="btn btn-info">查看热力图</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>平面座位图</h2>
+    <div class="plan-canvas" style="height:350px;">
+        <div class="stage-area" style="width:40%;height:12%;">
+            {{ session.singer_position }}
+        </div>
+        {% for p in points %}
+        {% set has_data = data_map.get(p.id) %}
+        <div class="point-marker {% if has_data %}has-data{% else %}missing-data{% endif %}"
+             style="left:{{ (p.x / stage.plan_width * 100) }}%;top:{{ (p.y / stage.plan_height * 100) }}%;"
+             title="{{ p.label }} {% if has_data %}(已录入){% else %}(未录入){% endif %}"
+             onclick="openDataForm({{ p.id }}, '{{ p.label }}', {% if has_data %}{{ has_data.sound_pressure or 'null' }},{{ has_data.reverberation_time or 'null' }},{{ has_data.speech_clarity or 'null' }}{% else %}null,null,null{% endif %})">
+            {{ p.label }}
+        </div>
+        {% endfor %}
+    </div>
+    <div style="margin-top:0.5rem;display:flex;gap:1rem;font-size:0.8rem;color:var(--text-light);">
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--success);vertical-align:middle;margin-right:4px;"></span>已录入</span>
+        <span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--primary);vertical-align:middle;margin-right:4px;"></span>未录入</span>
+    </div>
+</div>
+
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin-bottom:0;border:none;padding:0;">声学数据</h2>
+        <div class="actions">
+            <button class="btn btn-warning btn-sm" onclick="document.getElementById('batch-form').style.display='block'">批量导入</button>
+        </div>
+    </div>
+
+    <div id="batch-form" style="display:none;margin-bottom:1.5rem;padding:1rem;background:#fafafa;border-radius:8px;border:1px solid var(--border);">
+        <h3>批量导入 CSV 数据</h3>
+        <p style="font-size:0.85rem;color:var(--text-light);margin-bottom:0.8rem;">
+            CSV格式: 测量点标签, 声压(dB), 混响时间(s), 语言清晰度(STI)<br>
+            缺失值请留空。声压和混响时间不能为负数。
+        </p>
+        <form action="/stages/{{ stage.id }}/sessions/{{ session.id }}/data/batch" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <input type="file" name="file" accept=".csv" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">导入</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('batch-form').style.display='none'">取消</button>
+        </form>
+    </div>
+
+    {% if data_rows %}
+    <table>
+        <thead>
+            <tr>
+                <th>测量点</th>
+                <th>声压 (dB)</th>
+                <th>混响时间 (s)</th>
+                <th>语言清晰度 (STI)</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in data_rows %}
+            <tr>
+                <td>{{ d.point_label }}</td>
+                <td>{% if d.sound_pressure is not none %}{{ d.sound_pressure }}{% else %}<span class="missing-indicator">缺失</span>{% endif %}</td>
+                <td>{% if d.reverberation_time is not none %}{{ d.reverberation_time }}{% else %}<span class="missing-indicator">缺失</span>{% endif %}</td>
+                <td>{% if d.speech_clarity is not none %}{{ d.speech_clarity }}{% else %}<span class="missing-indicator">缺失</span>{% endif %}</td>
+                <td class="actions">
+                    <button class="btn btn-warning btn-sm" onclick="openDataForm({{ d.point_id }}, '{{ d.point_label }}', {{ d.sound_pressure or 'null' }}, {{ d.reverberation_time or 'null' }}, {{ d.speech_clarity or 'null' }})">编辑</button>
+                    <form action="/stages/{{ stage.id }}/sessions/{{ session.id }}/data/{{ d.id }}/delete" method="post" onsubmit="return confirm('确定删除该数据？')">
+                        <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top:1rem;padding:1rem;background:rgba(212,165,116,0.1);border-radius:8px;">
+        <h3 style="font-size:0.9rem;margin-bottom:0.5rem;">统计摘要（缺失数据不参与计算）</h3>
+        {% set ns = namespace(sp_vals=[], rt_vals=[], sc_vals=[]) %}
+        {% for d in data_rows %}
+            {% if d.sound_pressure is not none %}{% set ns.sp_vals = ns.sp_vals + [d.sound_pressure] %}{% endif %}
+            {% if d.reverberation_time is not none %}{% set ns.rt_vals = ns.rt_vals + [d.reverberation_time] %}{% endif %}
+            {% if d.speech_clarity is not none %}{% set ns.sc_vals = ns.sc_vals + [d.speech_clarity] %}{% endif %}
+        {% endfor %}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;font-size:0.85rem;">
+            <div>
+                <strong>声压</strong><br>
+                有效数据: {{ ns.sp_vals|length }}<br>
+                {% if ns.sp_vals %}平均值: {{ ns.sp_vals|sum / ns.sp_vals|length|round(2) }}{% endif %}
+            </div>
+            <div>
+                <strong>混响时间</strong><br>
+                有效数据: {{ ns.rt_vals|length }}<br>
+                {% if ns.rt_vals %}平均值: {{ ns.rt_vals|sum / ns.rt_vals|length|round(3) }}{% endif %}
+            </div>
+            <div>
+                <strong>语言清晰度</strong><br>
+                有效数据: {{ ns.sc_vals|length }}<br>
+                {% if ns.sc_vals %}平均值: {{ ns.sc_vals|sum / ns.sc_vals|length|round(3) }}{% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <p style="color:var(--text-light);text-align:center;padding:1rem;">点击平面图上的测量点开始录入数据</p>
+    {% endif %}
+</div>
+
+<div id="data-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;">
+    <div class="card" style="width:450px;margin:auto;margin-top:15vh;">
+        <h2>录入声学数据 - <span id="modal-point-label"></span></h2>
+        <form id="data-form" method="post">
+            <div class="form-group">
+                <label>声压 (dB)</label>
+                <input type="number" id="data-sp" name="sound_pressure" step="0.1" min="0" placeholder="如：65.3">
+            </div>
+            <div class="form-group">
+                <label>混响时间 (s)</label>
+                <input type="number" id="data-rt" name="reverberation_time" step="0.001" min="0" placeholder="如：1.250">
+            </div>
+            <div class="form-group">
+                <label>语言清晰度 STI</label>
+                <input type="number" id="data-sc" name="speech_clarity" step="0.01" min="0" max="1" placeholder="如：0.55">
+            </div>
+            <div class="form-group">
+                <label>备注</label>
+                <input type="text" id="data-notes" name="notes" placeholder="可选备注">
+            </div>
+            <input type="hidden" id="data-point-id" name="point_id">
+            <button type="submit" class="btn btn-primary">保存</button>
+            <button type="button" class="btn btn-outline" onclick="document.getElementById('data-modal').style.display='none'">取消</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function openDataForm(pointId, label, sp, rt, sc) {
+    document.getElementById('modal-point-label').textContent = label;
+    document.getElementById('data-point-id').value = pointId;
+    document.getElementById('data-sp').value = sp || '';
+    document.getElementById('data-rt').value = rt || '';
+    document.getElementById('data-sc').value = sc || '';
+    document.getElementById('data-form').action = '/stages/{{ stage.id }}/sessions/{{ session.id }}/data/save';
+    document.getElementById('data-modal').style.display = 'flex';
+}
+</script>
+{% endblock %}

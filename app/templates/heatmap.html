@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}声场热力图 - {{ stage.name }}{% endblock %}
+{% block extra_head %}
+<style>
+    .metric-tabs { display:flex;gap:0.5rem;margin-bottom:1rem; }
+    .metric-tab {
+        padding:0.5rem 1rem;border-radius:6px;cursor:pointer;
+        border:1px solid var(--border);background:white;font-size:0.9rem;
+        transition:all 0.2s;font-family:inherit;
+    }
+    .metric-tab.active { background:var(--primary);color:white;border-color:var(--primary); }
+    .metric-tab:hover:not(.active) { border-color:var(--primary);color:var(--primary); }
+</style>
+{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/stages/{{ stage.id }}/sessions/{{ session.id }}" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回测量数据</a>
+</div>
+
+<div style="margin-bottom:1rem;">
+    <h1 style="color:var(--primary);margin-bottom:0.3rem;">声场热力图 - {{ stage.name }}</h1>
+    <div class="session-condition">
+        <span class="condition-tag condition-singer">演唱位置: {{ session.singer_position }}</span>
+        <span class="condition-tag condition-audience">观众: {{ session.audience_count }}人</span>
+        <span class="condition-tag condition-door">门窗:
+            {% if session.door_window_state == 'open' %}开启
+            {% elif session.door_window_state == 'closed' %}关闭
+            {% else %}半开{% endif %}
+        </span>
+    </div>
+</div>
+
+<div class="metric-tabs">
+    <button class="metric-tab active" onclick="switchMetric('sound_pressure')">声压 (dB)</button>
+    <button class="metric-tab" onclick="switchMetric('reverberation_time')">混响时间 (s)</button>
+    <button class="metric-tab" onclick="switchMetric('speech_clarity')">语言清晰度 (STI)</button>
+</div>
+
+<div class="card">
+    <div id="heatmap-plot" class="heatmap-container"></div>
+    {% if not data_rows %}
+    <p style="color:var(--text-light);text-align:center;padding:2rem;">暂无测量数据，请先录入声学数据</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>数据明细</h2>
+    {% if data_rows %}
+    <table>
+        <thead>
+            <tr>
+                <th>测量点</th>
+                <th>X</th>
+                <th>Y</th>
+                <th>声压 (dB)</th>
+                <th>混响时间 (s)</th>
+                <th>语言清晰度</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in data_rows %}
+            <tr>
+                <td>{{ d.point_label }}</td>
+                <td>{{ d.x }}</td>
+                <td>{{ d.y }}</td>
+                <td>{% if d.sound_pressure is not none %}{{ d.sound_pressure }}{% else %}<span class="missing-indicator">缺失</span>{% endif %}</td>
+                <td>{% if d.reverberation_time is not none %}{{ d.reverberation_time }}{% else %}<span class="missing-indicator">缺失</span>{% endif %}</td>
+                <td>{% if d.speech_clarity is not none %}{{ d.speech_clarity }}{% else %}<span class="missing-indicator">缺失</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text-light);text-align:center;">暂无数据</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const dataRows = {{ data_rows | tojson }};
+const stageWidth = {{ stage.plan_width }};
+const stageHeight = {{ stage.plan_height }};
+const stageName = "{{ stage.name }}";
+
+const metricConfig = {
+    sound_pressure: { label: "声压 (dB)", colorscale: "YlOrRd", reverse: false },
+    reverberation_time: { label: "混响时间 (s)", colorscale: "YlGnBu", reverse: false },
+    speech_clarity: { label: "语言清晰度 (STI)", colorscale: "RdYlGn", reverse: true }
+};
+
+let currentMetric = "sound_pressure";
+
+function buildHeatmap(metric) {
+    const config = metricConfig[metric];
+    const filteredRows = dataRows.filter(r => r[metric] !== null && r[metric] !== undefined);
+
+    if (filteredRows.length === 0) {
+        document.getElementById("heatmap-plot").innerHTML =
+            '<p style="text-align:center;padding:3rem;color:var(--text-light);">该指标暂无有效数据（缺失数据不参与热力图生成）</p>';
+        return;
+    }
+
+    const xVals = filteredRows.map(r => r.x);
+    const yVals = filteredRows.map(r => r.y);
+    const zVals = filteredRows.map(r => r[metric]);
+    const labels = filteredRows.map(r => r.point_label);
+
+    const trace = {
+        x: xVals,
+        y: yVals,
+        z: zVals,
+        text: labels.map((l, i) => `${l}<br>${config.label}: ${zVals[i]}`),
+        type: "contour",
+        colorscale: config.colorscale,
+        reversescale: config.reverse,
+        contours: { coloring: "heatmap" },
+        line: { width: 0 },
+        ncontours: 20,
+        hoverinfo: "text+z",
+    };
+
+    const scatterTrace = {
+        x: xVals,
+        y: yVals,
+        text: labels.map((l, i) => `${l}: ${zVals[i]}`),
+        mode: "markers+text",
+        type: "scatter",
+        textposition: "top center",
+        textfont: { size: 10 },
+        marker: {
+            size: 10,
+            color: "#333",
+            line: { width: 2, color: "white" }
+        },
+        hoverinfo: "text",
+        showlegend: false,
+    };
+
+    const layout = {
+        title: `${stageName} - ${config.label}分布`,
+        xaxis: { title: "X (米)", range: [0, stageWidth], constrain: "domain" },
+        yaxis: { title: "Y (米)", range: [0, stageHeight], scaleanchor: "x", scaleratio: 1 },
+        autosize: true,
+        height: 500,
+        margin: { l: 60, r: 80, t: 50, b: 60 },
+        shapes: [{
+            type: "rect",
+            x0: stageWidth * 0.3,
+            x1: stageWidth * 0.7,
+            y0: 0,
+            y1: stageHeight * 0.12,
+            fillcolor: "rgba(210,180,140,0.3)",
+            line: { color: "#8B4513", width: 2 },
+        }],
+        annotations: [{
+            x: stageWidth * 0.5,
+            y: stageHeight * 0.06,
+            text: "舞台",
+            showarrow: false,
+            font: { color: "#8B4513", size: 14 },
+        }],
+    };
+
+    Plotly.newPlot("heatmap-plot", [trace, scatterTrace], layout, { responsive: true });
+}
+
+function switchMetric(metric) {
+    currentMetric = metric;
+    document.querySelectorAll(".metric-tab").forEach(tab => tab.classList.remove("active"));
+    event.target.classList.add("active");
+    buildHeatmap(metric);
+}
+
+buildHeatmap(currentMetric);
+</script>
+{% endblock %}

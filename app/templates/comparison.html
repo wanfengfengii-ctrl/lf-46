@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}对比分析 - {{ stage.name }}{% endblock %}
+{% block extra_head %}
+<style>
+    .session-checkbox { display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0; }
+    .session-checkbox input[type="checkbox"] { width:18px;height:18px;accent-color:var(--primary); }
+    .session-checkbox label { cursor:pointer;font-size:0.9rem; }
+    .compare-grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(450px,1fr));gap:1.5rem; }
+    .diff-table td.positive { color:var(--success);font-weight:600; }
+    .diff-table td.negative { color:var(--danger);font-weight:600; }
+</style>
+{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/stages/{{ stage.id }}" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回{{ stage.name }}</a>
+</div>
+
+<h1 style="color:var(--primary);margin-bottom:1rem;">对比分析 - {{ stage.name }}</h1>
+
+{% if comparison_error %}
+<div class="alert alert-danger">{{ comparison_error }}</div>
+{% endif %}
+
+<div class="card">
+    <h2>选择对比场次</h2>
+    <p style="font-size:0.85rem;color:var(--text-light);margin-bottom:1rem;">
+        选择两个或多个测量场次进行对比。对比实验必须来自同一戏台（已自动限制）。
+    </p>
+    <form id="compare-form" method="get" action="/stages/{{ stage.id }}/compare" onsubmit="return validateCompare()">
+        <input type="hidden" name="sessions" id="sessions-input" value="{{ selected_session_ids | join(',') }}">
+        {% if all_sessions|length < 2 %}
+        <p style="color:var(--text-light);">至少需要2个测量场次才能进行对比</p>
+        {% else %}
+        {% for s in all_sessions %}
+        <div class="session-checkbox">
+            <input type="checkbox" name="session_check" value="{{ s.id }}" id="session-{{ s.id }}"
+                   {% if s.id in selected_session_ids %}checked{% endif %}
+                   onchange="updateSessionsInput()">
+            <label for="session-{{ s.id }}">
+                <strong>{{ s.singer_position }}</strong> |
+                观众{{ s.audience_count }}人 |
+                门窗{% if s.door_window_state == 'open' %}开启{% elif s.door_window_state == 'closed' %}关闭{% else %}半开{% endif %}
+            </label>
+        </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary" style="margin-top:1rem;">生成对比</button>
+        {% endif %}
+    </form>
+</div>
+
+{% if comparison_data and comparison_data|length >= 2 %}
+<div class="card">
+    <h2>条件对比摘要</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>指标</th>
+                {% for cd in comparison_data %}
+                <th>{{ cd.session.singer_position }} / 观众{{ cd.session.audience_count }}人 / 门窗{% if cd.session.door_window_state == 'open' %}开启{% elif cd.session.door_window_state == 'closed' %}关闭{% else %}半开{% endif %}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for metric_name, metric_key in [("声压均值 (dB)", "sound_pressure"), ("混响时间均值 (s)", "reverberation_time"), ("语言清晰度均值", "speech_clarity")] %}
+            <tr>
+                <td><strong>{{ metric_name }}</strong></td>
+                {% for cd in comparison_data %}
+                {% set vals = cd.data | selectattr(metric_key, "ne", none) | map(attribute=metric_key) | list %}
+                <td>{% if vals %}{{ (vals | sum / vals | length) | round(3) }}{% else %}<span class="missing-indicator">无数据</span>{% endif %}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="card">
+    <h2>声场热力图对比</h2>
+    <div class="metric-tabs" style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+        <button class="metric-tab active" onclick="switchCompareMetric('sound_pressure')">声压</button>
+        <button class="metric-tab" onclick="switchCompareMetric('reverberation_time')">混响时间</button>
+        <button class="metric-tab" onclick="switchCompareMetric('speech_clarity')">语言清晰度</button>
+    </div>
+    <div class="compare-grid" id="compare-heatmaps"></div>
+</div>
+
+<div class="card">
+    <h2>逐测量点差异分析</h2>
+    {% if diff_table is not none %}
+    <table class="diff-table">
+        <thead>
+            <tr>
+                <th>测量点</th>
+                <th>场次1 声压</th>
+                <th>场次2 声压</th>
+                <th>声压差值</th>
+                <th>场次1 混响</th>
+                <th>场次2 混响</th>
+                <th>混响差值</th>
+                <th>场次1 清晰度</th>
+                <th>场次2 清晰度</th>
+                <th>清晰度差值</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in diff_table %}
+            <tr>
+                <td>{{ row.label }}</td>
+                <td>{% if row.d1 and row.d1.sound_pressure is not none %}{{ row.d1.sound_pressure }}{% else %}<span class="missing-indicator">-</span>{% endif %}</td>
+                <td>{% if row.d2 and row.d2.sound_pressure is not none %}{{ row.d2.sound_pressure }}{% else %}<span class="missing-indicator">-</span>{% endif %}</td>
+                {% if row.sp_diff is not none %}
+                <td class="{% if row.sp_diff > 0 %}positive{% else %}negative{% endif %}">
+                    {{ row.sp_diff }}
+                </td>
+                {% else %}
+                <td><span class="missing-indicator">-</span></td>
+                {% endif %}
+                <td>{% if row.d1 and row.d1.reverberation_time is not none %}{{ row.d1.reverberation_time }}{% else %}<span class="missing-indicator">-</span>{% endif %}</td>
+                <td>{% if row.d2 and row.d2.reverberation_time is not none %}{{ row.d2.reverberation_time }}{% else %}<span class="missing-indicator">-</span>{% endif %}</td>
+                {% if row.rt_diff is not none %}
+                <td class="{% if row.rt_diff > 0 %}positive{% else %}negative{% endif %}">
+                    {{ row.rt_diff }}
+                </td>
+                {% else %}
+                <td><span class="missing-indicator">-</span></td>
+                {% endif %}
+                <td>{% if row.d1 and row.d1.speech_clarity is not none %}{{ row.d1.speech_clarity }}{% else %}<span class="missing-indicator">-</span>{% endif %}</td>
+                <td>{% if row.d2 and row.d2.speech_clarity is not none %}{{ row.d2.speech_clarity }}{% else %}<span class="missing-indicator">-</span>{% endif %}</td>
+                {% if row.sc_diff is not none %}
+                <td class="{% if row.sc_diff > 0 %}positive{% else %}negative{% endif %}">
+                    {{ row.sc_diff }}
+                </td>
+                {% else %}
+                <td><span class="missing-indicator">-</span></td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text-light);text-align:center;">逐点差异分析仅在选择2个场次时显示</p>
+    {% endif %}
+</div>
+{% elif selected_session_ids|length < 2 and selected_session_ids|length > 0 %}
+<div class="alert alert-info">请至少选择2个测量场次进行对比</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const comparisonData = {{ comparison_data | tojson }};
+const stageWidth = {{ stage.plan_width }};
+const stageHeight = {{ stage.plan_height }};
+const stageName = "{{ stage.name }}";
+
+const metricConfig = {
+    sound_pressure: { label: "声压 (dB)", colorscale: "YlOrRd", reverse: false },
+    reverberation_time: { label: "混响时间 (s)", colorscale: "YlGnBu", reverse: false },
+    speech_clarity: { label: "语言清晰度 (STI)", colorscale: "RdYlGn", reverse: true }
+};
+
+let currentMetric = "sound_pressure";
+
+function buildCompareHeatmaps(metric) {
+    const container = document.getElementById("compare-heatmaps");
+    container.innerHTML = "";
+
+    comparisonData.forEach((cd, idx) => {
+        const div = document.createElement("div");
+        div.id = `compare-plot-${idx}`;
+        div.style.minHeight = "380px";
+        container.appendChild(div);
+
+        const config = metricConfig[metric];
+        const filteredRows = cd.data.filter(r => r[metric] !== null && r[metric] !== undefined);
+
+        if (filteredRows.length === 0) {
+            div.innerHTML = `<p style="text-align:center;padding:3rem;color:var(--text-light);">${config.label}无有效数据</p>`;
+            return;
+        }
+
+        const xVals = filteredRows.map(r => r.x);
+        const yVals = filteredRows.map(r => r.y);
+        const zVals = filteredRows.map(r => r[metric]);
+        const labels = filteredRows.map(r => r.point_label);
+
+        const sessionLabel = `${cd.session.singer_position} / 观众${cd.session.audience_count}人`;
+
+        const trace = {
+            x: xVals, y: yVals, z: zVals,
+            text: labels.map((l, i) => `${l}<br>${config.label}: ${zVals[i]}`),
+            type: "contour",
+            colorscale: config.colorscale,
+            reversescale: config.reverse,
+            contours: { coloring: "heatmap" },
+            line: { width: 0 },
+            ncontours: 15,
+        };
+
+        const scatterTrace = {
+            x: xVals, y: yVals,
+            text: labels.map((l, i) => `${l}: ${zVals[i]}`),
+            mode: "markers+text",
+            type: "scatter",
+            textposition: "top center",
+            textfont: { size: 9 },
+            marker: { size: 8, color: "#333", line: { width: 1.5, color: "white" } },
+            showlegend: false,
+        };
+
+        const layout = {
+            title: sessionLabel,
+            xaxis: { title: "X (米)", range: [0, stageWidth] },
+            yaxis: { title: "Y (米)", range: [0, stageHeight], scaleanchor: "x", scaleratio: 1 },
+            autosize: true,
+            height: 380,
+            margin: { l: 50, r: 60, t: 40, b: 50 },
+            shapes: [{
+                type: "rect",
+                x0: stageWidth * 0.3, x1: stageWidth * 0.7,
+                y0: 0, y1: stageHeight * 0.12,
+                fillcolor: "rgba(210,180,140,0.3)",
+                line: { color: "#8B4513", width: 2 },
+            }],
+        };
+
+        Plotly.newPlot(div.id, [trace, scatterTrace], layout, { responsive: true });
+    });
+}
+
+function switchCompareMetric(metric) {
+    currentMetric = metric;
+    document.querySelectorAll(".metric-tab").forEach(tab => tab.classList.remove("active"));
+    event.target.classList.add("active");
+    buildCompareHeatmaps(metric);
+}
+
+function updateSessionsInput() {
+    const checked = document.querySelectorAll('input[name="session_check"]:checked');
+    const ids = Array.from(checked).map(c => c.value).join(",");
+    document.getElementById("sessions-input").value = ids;
+}
+
+function validateCompare() {
+    const checked = document.querySelectorAll('input[name="session_check"]:checked');
+    if (checked.length < 2) {
+        alert("请至少选择2个测量场次进行对比");
+        return false;
+    }
+    updateSessionsInput();
+    return true;
+}
+
+if (comparisonData.length >= 2) {
+    buildCompareHeatmaps(currentMetric);
+}
+</script>
+{% endblock %}

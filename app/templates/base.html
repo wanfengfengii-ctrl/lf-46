@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}古戏台声学分析系统{% endblock %}</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --primary: #8B4513;
+            --primary-light: #A0522D;
+            --primary-dark: #6B3410;
+            --accent: #D4A574;
+            --bg: #F5F0EB;
+            --card-bg: #FFFFFF;
+            --text: #2C1810;
+            --text-light: #6B5B4F;
+            --border: #D4C5B0;
+            --success: #4A7C59;
+            --warning: #C4943A;
+            --danger: #9B3B3B;
+            --info: #4A6B8A;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        nav {
+            background: linear-gradient(135deg, var(--primary-dark), var(--primary));
+            color: white;
+            padding: 0.8rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        nav .logo {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-decoration: none;
+            color: white;
+        }
+        nav a {
+            color: rgba(255,255,255,0.85);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+        nav a:hover { color: white; }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid var(--border);
+        }
+        .card h2 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent);
+            font-size: 1.2rem;
+        }
+        .card h3 {
+            color: var(--primary-light);
+            margin-bottom: 0.8rem;
+            font-size: 1.05rem;
+        }
+        .btn {
+            display: inline-block;
+            padding: 0.5rem 1.2rem;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover { background: var(--primary-light); }
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .btn-success:hover { opacity: 0.9; }
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-danger:hover { opacity: 0.9; }
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+        .btn-warning:hover { opacity: 0.9; }
+        .btn-info {
+            background: var(--info);
+            color: white;
+        }
+        .btn-info:hover { opacity: 0.9; }
+        .btn-sm { padding: 0.3rem 0.8rem; font-size: 0.8rem; }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+        }
+        .btn-outline:hover {
+            background: var(--primary);
+            color: white;
+        }
+        form { display: inline; }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 0.3rem;
+            font-weight: 600;
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.5rem 0.8rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(139,69,19,0.1);
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        table th {
+            background: var(--primary);
+            color: white;
+            padding: 0.7rem 0.8rem;
+            text-align: left;
+            font-weight: 600;
+        }
+        table td {
+            padding: 0.6rem 0.8rem;
+            border-bottom: 1px solid var(--border);
+        }
+        table tr:hover td {
+            background: rgba(212,165,116,0.1);
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.6rem;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-warning { background: #fff3cd; color: #856404; }
+        .badge-danger { background: #f8d7da; color: #721c24; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+        .alert {
+            padding: 0.8rem 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+        }
+        .alert-danger {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .alert-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .plan-canvas {
+            background: #FAFAF5;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            position: relative;
+            min-height: 400px;
+            overflow: hidden;
+        }
+        .stage-area {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #E8D5B7, #D4C5A0);
+            border: 2px solid var(--primary-light);
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-dark);
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .point-marker {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            font-weight: 700;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+            z-index: 2;
+        }
+        .point-marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+        .point-marker.has-data {
+            background: var(--success);
+        }
+        .point-marker.missing-data {
+            background: var(--warning);
+        }
+        .heatmap-container {
+            width: 100%;
+            min-height: 450px;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(212,165,116,0.1);
+            border-radius: 8px;
+        }
+        .stat-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-light);
+        }
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.5rem;
+            border-bottom: 2px solid var(--border);
+        }
+        .tab-bar a {
+            padding: 0.7rem 1.5rem;
+            text-decoration: none;
+            color: var(--text-light);
+            font-size: 0.9rem;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+        .tab-bar a:hover {
+            color: var(--primary);
+        }
+        .tab-bar a.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            font-weight: 600;
+        }
+        .session-condition {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.8rem;
+        }
+        .condition-tag {
+            padding: 0.25rem 0.8rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .condition-singer { background: #E8D5E0; color: #6B2D5B; }
+        .condition-audience { background: #D5E0E8; color: #2D5B6B; }
+        .condition-door { background: #E0E8D5; color: #4A6B2D; }
+        .comparison-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 1.5rem;
+        }
+        .conclusion-card {
+            border-left: 4px solid var(--accent);
+            padding-left: 1rem;
+        }
+        .conclusion-card.abnormal {
+            border-left-color: var(--warning);
+        }
+        .conclusion-card.confirmed {
+            border-left-color: var(--success);
+        }
+        .missing-indicator {
+            color: var(--text-light);
+            font-style: italic;
+        }
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .form-row { grid-template-columns: 1fr; }
+            .comparison-panel { grid-template-columns: 1fr; }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        <a href="/" class="logo">古戏台声学分析</a>
+        <a href="/">戏台列表</a>
+    </nav>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

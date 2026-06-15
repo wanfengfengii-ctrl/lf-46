@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ stage.name }} - 古戏台声学分析系统{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.5rem;">
+    <a href="/" style="color:var(--text-light);text-decoration:none;font-size:0.9rem;">← 返回戏台列表</a>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.5rem;">
+    <div>
+        <h1 style="color:var(--primary);margin-bottom:0.3rem;">{{ stage.name }}</h1>
+        <p style="color:var(--text-light);">{{ stage.location }} {% if stage.description %}· {{ stage.description }}{% endif %}</p>
+    </div>
+    <a href="/stages/{{ stage.id }}/compare" class="btn btn-info">对比分析</a>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-item">
+        <div class="stat-value">{{ points|length }}</div>
+        <div class="stat-label">测量点</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ sessions|length }}</div>
+        <div class="stat-label">测量场次</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-value">{{ conclusions|length }}</div>
+        <div class="stat-label">分析结论</div>
+    </div>
+</div>
+
+<div class="tab-bar">
+    <a href="/stages/{{ stage.id }}/points" class="{% if request.query_params.get('tab','') == 'points' %}active{% endif %}">测量点管理</a>
+    <a href="/stages/{{ stage.id }}#sessions" class="">测量场次</a>
+</div>
+
+<div id="sessions" class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin-bottom:0;border:none;padding:0;">测量场次</h2>
+        <a href="/stages/{{ stage.id }}/sessions/create" class="btn btn-primary btn-sm">+ 新增场次</a>
+    </div>
+    {% if sessions %}
+    <table>
+        <thead>
+            <tr>
+                <th>演唱位置</th>
+                <th>观众数量</th>
+                <th>门窗状态</th>
+                <th>数据条数</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sessions %}
+            <tr>
+                <td>{{ s.singer_position }}</td>
+                <td>{{ s.audience_count }}</td>
+                <td>
+                    {% if s.door_window_state == 'open' %}
+                        <span class="badge badge-success">开启</span>
+                    {% elif s.door_window_state == 'closed' %}
+                        <span class="badge badge-danger">关闭</span>
+                    {% else %}
+                        <span class="badge badge-warning">半开</span>
+                    {% endif %}
+                </td>
+                <td>{{ s.data_count }}</td>
+                <td class="actions">
+                    <a href="/stages/{{ stage.id }}/sessions/{{ s.id }}" class="btn btn-primary btn-sm">查看数据</a>
+                    <a href="/stages/{{ stage.id }}/heatmap/{{ s.id }}" class="btn btn-info btn-sm">热力图</a>
+                    <form action="/stages/{{ stage.id }}/sessions/{{ s.id }}/delete" method="post" onsubmit="return confirm('确定删除该场次？')">
+                        <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text-light);text-align:center;padding:1rem;">暂无测量场次，请先添加测量点再创建场次</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="margin-bottom:0;border:none;padding:0;">分析结论</h2>
+    </div>
+    <form action="/stages/{{ stage.id }}/conclusions/create" method="post" style="margin-bottom:1.5rem;">
+        <div class="form-group">
+            <label>提交分析结论</label>
+            <textarea name="content" rows="3" required placeholder="基于声学数据分析，该戏台建筑结构对声音传播的影响..."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">提交结论</button>
+    </form>
+    {% if conclusions %}
+    {% for c in conclusions %}
+    <div class="conclusion-card {% if c.has_abnormal_data %}abnormal{% elif c.is_confirmed %}confirmed{% endif %}" style="margin-bottom:1rem;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="flex:1;">
+                <p style="margin-bottom:0.5rem;">{{ c.content }}</p>
+                <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <small style="color:var(--text-light);">{{ c.created_at }}</small>
+                    {% if c.is_confirmed %}
+                        <span class="badge badge-success">已确认</span>
+                    {% elif c.has_abnormal_data %}
+                        <span class="badge badge-warning">存在异常数据</span>
+                    {% else %}
+                        <span class="badge badge-info">待确认</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="actions">
+                {% if not c.is_confirmed %}
+                <form action="/stages/{{ stage.id }}/conclusions/{{ c.id }}/confirm" method="post"
+                      {% if c.has_abnormal_data %}onsubmit="alert('存在异常数据，不能直接确认实验结论。请先处理异常数据或修改结论。');return false;"{% endif %}>
+                    <button type="submit" class="btn btn-success btn-sm" {% if c.has_abnormal_data %}disabled title="存在异常数据，无法确认"{% endif %}>确认结论</button>
+                </form>
+                {% endif %}
+                <form action="/stages/{{ stage.id }}/conclusions/{{ c.id }}/delete" method="post" onsubmit="return confirm('确定删除该结论？')">
+                    <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="color:var(--text-light);text-align:center;">暂无分析结论</p>
+    {% endif %}
+</div>
+{% endblock %}

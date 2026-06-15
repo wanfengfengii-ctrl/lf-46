@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}戏台列表 - 古戏台声学分析系统{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;">
+    <h1 style="color:var(--primary);">古戏台测量项目</h1>
+    <button class="btn btn-primary" onclick="document.getElementById('create-form').style.display='block'">+ 新建戏台项目</button>
+</div>
+
+<div id="create-form" class="card" style="display:none;">
+    <h2>创建戏台测量项目</h2>
+    <form action="/stages/create" method="post">
+        <div class="form-row">
+            <div class="form-group">
+                <label>戏台名称 *</label>
+                <input type="text" name="name" required placeholder="如：万安戏台">
+            </div>
+            <div class="form-group">
+                <label>所在位置</label>
+                <input type="text" name="location" placeholder="如：江西省万安县">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>平面宽度 (米)</label>
+                <input type="number" name="plan_width" value="20" step="0.1" min="1">
+            </div>
+            <div class="form-group">
+                <label>平面高度 (米)</label>
+                <input type="number" name="plan_height" value="15" step="0.1" min="1">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>描述</label>
+            <textarea name="description" rows="2" placeholder="戏台的建筑特征、历史背景等"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">创建项目</button>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('create-form').style.display='none'">取消</button>
+    </form>
+</div>
+
+{% if stages %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>戏台名称</th>
+                <th>所在位置</th>
+                <th>测量点</th>
+                <th>测量场次</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in stages %}
+            <tr>
+                <td><a href="/stages/{{ s.id }}" style="color:var(--primary);font-weight:600;">{{ s.name }}</a></td>
+                <td>{{ s.location or '-' }}</td>
+                <td>{{ s.point_count }}</td>
+                <td>{{ s.session_count }}</td>
+                <td class="actions">
+                    <a href="/stages/{{ s.id }}" class="btn btn-primary btn-sm">查看详情</a>
+                    <form action="/stages/{{ s.id }}/delete" method="post" onsubmit="return confirm('确定删除该戏台项目？所有关联数据将被清除。')">
+                        <button type="submit" class="btn btn-danger btn-sm">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:3rem;">
+    <p style="color:var(--text-light);font-size:1.1rem;margin-bottom:1rem;">尚无戏台测量项目</p>
+    <button class="btn btn-primary" onclick="document.getElementById('create-form').style.display='block'">创建第一个项目</button>
+</div>
+{% endif %}
+{% endblock %}
