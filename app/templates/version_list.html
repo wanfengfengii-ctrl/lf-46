@@ -133,6 +133,16 @@
                 </select>
             </div>
             <div class="form-group">
+                <label>关联测量任务（可选，将自动快照任务、设备、校准与执行环境）</label>
+                <select name="task_id">
+                    <option value="">-- 不关联任务 --</option>
+                    {% for t in tasks %}
+                    <option value="{{ t.id }}">{{ t.task_name }}{% if t.responsible_person %} - {{ t.responsible_person }}{% endif %} ({{ t.status }})</option>
+                    {% endfor %}
+                </select>
+                <small style="color:var(--text-light);">提示：选择场次后若该场次已关联任务，会自动同步任务信息</small>
+            </div>
+            <div class="form-group">
                 <label>数据来源</label>
                 <input type="text" name="data_source" placeholder="如：现场实测 / 实验室复现 / 文献补录" />
             </div>

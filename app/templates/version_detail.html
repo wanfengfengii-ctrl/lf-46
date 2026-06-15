@@ -116,6 +116,9 @@
 <div class="tab-bar">
     <a href="javascript:void(0)" class="active" onclick="showVerTab(event, 'points')">测量点快照</a>
     <a href="javascript:void(0)" onclick="showVerTab(event, 'acoustic')">声学数据快照</a>
+    <a href="javascript:void(0)" onclick="showVerTab(event, 'task')">任务背景</a>
+    <a href="javascript:void(0)" onclick="showVerTab(event, 'equipment')">设备与校准</a>
+    <a href="javascript:void(0)" onclick="showVerTab(event, 'environment')">执行环境</a>
     <a href="javascript:void(0)" onclick="showVerTab(event, 'stats')">均值统计</a>
     <a href="javascript:void(0)" onclick="showVerTab(event, 'changelog')">变更日志</a>
     <a href="javascript:void(0)" onclick="showVerTab(event, 'conclusion')">结论快照</a>
@@ -157,6 +160,166 @@
         </table>
         {% else %}
         <p style="color:var(--text-light);text-align:center;">暂无测量点数据</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-task" class="ver-tab" style="display:none;">
+    <div class="card">
+        <h2>任务背景快照</h2>
+        {% if task_snapshot %}
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:0.8rem 2rem;font-size:0.95rem;">
+            <span style="color:var(--text-light);">任务名称：</span>
+            <span style="font-weight:600;">{{ task_snapshot.task_name }}</span>
+            <span style="color:var(--text-light);">负责人：</span>
+            <span>{{ task_snapshot.responsible_person or '未指定' }}</span>
+            <span style="color:var(--text-light);">测量日期：</span>
+            <span>{{ task_snapshot.measurement_date or '-' }}</span>
+            <span style="color:var(--text-light);">采样时段：</span>
+            <span>
+                {% if task_snapshot.sampling_start_time %}{{ task_snapshot.sampling_start_time }}{% endif %}
+                {% if task_snapshot.sampling_start_time and task_snapshot.sampling_end_time %} - {% endif %}
+                {% if task_snapshot.sampling_end_time %}{{ task_snapshot.sampling_end_time }}{% endif %}
+                {% if not task_snapshot.sampling_start_time and not task_snapshot.sampling_end_time %}-{% endif %}
+            </span>
+            <span style="color:var(--text-light);">任务状态：</span>
+            <span>
+                <span class="badge 
+                    {% if task_snapshot.status == 'completed' %}badge-success
+                    {% elif task_snapshot.status == 'in_progress' %}badge-warning
+                    {% elif task_snapshot.status == 'cancelled' %}badge-danger
+                    {% else %}badge-info
+                    {% endif %}">{{ task_snapshot.status_text }}</span>
+            </span>
+            {% if task_snapshot.site_notes %}
+            <span style="color:var(--text-light);">现场备注：</span>
+            <span>{{ task_snapshot.site_notes }}</span>
+            {% endif %}
+        </div>
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">此版本未关联测量任务</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-equipment" class="ver-tab" style="display:none;">
+    <div class="card">
+        <h2>设备与校准快照</h2>
+        {% if equipment_snapshots %}
+        <table>
+            <thead>
+                <tr>
+                    <th>设备名称</th>
+                    <th>类型</th>
+                    <th>型号</th>
+                    <th>序列号</th>
+                    <th>设备状态</th>
+                    <th>校准状态</th>
+                    <th>上次校准</th>
+                    <th>下次校准</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in equipment_snapshots %}
+                <tr>
+                    <td style="font-weight:600;">{{ eq.name }}</td>
+                    <td>{{ eq.type }}</td>
+                    <td>{{ eq.model or '-' }}</td>
+                    <td>{{ eq.serial_number or '-' }}</td>
+                    <td>{{ eq.status }}</td>
+                    <td>
+                        {% if eq.calibration_status == 'valid' %}
+                        <span class="badge badge-success">校准有效</span>
+                        {% elif eq.calibration_status == 'invalid' %}
+                        <span class="badge badge-danger">校准失效</span>
+                        {% elif eq.calibration_status == 'pending' %}
+                        <span class="badge badge-warning">待确认</span>
+                        {% else %}
+                        <span class="badge badge-info">未知</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ eq.last_calibration_date or '-' }}</td>
+                    <td>{{ eq.next_calibration_date or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if calibration_snapshots %}
+        <h3 style="margin-top:1.5rem;">校准记录详情</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>设备名称</th>
+                    <th>校准日期</th>
+                    <th>校准结果</th>
+                    <th>校准值</th>
+                    <th>校准人</th>
+                    <th>证书编号</th>
+                    <th>下次校准</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cal in calibration_snapshots %}
+                <tr>
+                    <td style="font-weight:600;">{{ cal.equipment_name }}</td>
+                    <td>{{ cal.calibration_date }}</td>
+                    <td>
+                        {% if cal.calibration_result == '合格' %}
+                        <span class="badge badge-success">合格</span>
+                        {% elif cal.calibration_result == '不合格' %}
+                        <span class="badge badge-danger">不合格</span>
+                        {% else %}
+                        <span class="badge badge-warning">待确认</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ '%.3f'|format(cal.calibration_value) if cal.calibration_value is not none else '-' }}</td>
+                    <td>{{ cal.calibrated_by or '-' }}</td>
+                    <td>{{ cal.certificate_number or '-' }}</td>
+                    <td>{{ cal.next_calibration_date or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">此版本未记录设备信息</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-environment" class="ver-tab" style="display:none;">
+    <div class="card">
+        <h2>执行环境快照</h2>
+        {% if execution_snapshots %}
+        <table>
+            <thead>
+                <tr>
+                    <th>执行日期</th>
+                    <th>天气状况</th>
+                    <th>环境噪声(dB)</th>
+                    <th>温度(°C)</th>
+                    <th>湿度(%)</th>
+                    <th>执行人员</th>
+                    <th>环境备注</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rec in execution_snapshots %}
+                <tr>
+                    <td style="font-weight:600;">{{ rec.execution_date or '-' }}</td>
+                    <td>{{ rec.weather_condition or '-' }}</td>
+                    <td>{{ '%.1f'|format(rec.ambient_noise_level) if rec.ambient_noise_level is not none else '-' }}</td>
+                    <td>{{ '%.1f'|format(rec.temperature) if rec.temperature is not none else '-' }}</td>
+                    <td>{{ '%.1f'|format(rec.humidity) if rec.humidity is not none else '-' }}</td>
+                    <td>{{ rec.executor or '-' }}</td>
+                    <td style="font-size:0.85rem;color:var(--text-light);">{{ rec.environment_notes or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">此版本未记录执行环境信息</p>
         {% endif %}
     </div>
 </div>

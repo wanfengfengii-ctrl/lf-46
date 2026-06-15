@@ -219,6 +219,69 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS version_task_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            task_id INTEGER,
+            task_name TEXT NOT NULL DEFAULT '',
+            responsible_person TEXT NOT NULL DEFAULT '',
+            measurement_date DATE,
+            sampling_start_time TEXT,
+            sampling_end_time TEXT,
+            status TEXT NOT NULL DEFAULT '',
+            site_notes TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE,
+            FOREIGN KEY (task_id) REFERENCES measurement_tasks(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS version_equipment_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            equipment_id INTEGER,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            model TEXT NOT NULL DEFAULT '',
+            serial_number TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT '',
+            calibration_status TEXT NOT NULL DEFAULT '',
+            last_calibration_date DATE,
+            next_calibration_date DATE,
+            calibration_result TEXT NOT NULL DEFAULT '',
+            notes TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE,
+            FOREIGN KEY (equipment_id) REFERENCES equipment(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS version_calibration_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            equipment_id INTEGER,
+            equipment_name TEXT NOT NULL DEFAULT '',
+            calibration_date DATE NOT NULL,
+            calibration_result TEXT NOT NULL,
+            calibration_value REAL,
+            calibrated_by TEXT NOT NULL DEFAULT '',
+            certificate_number TEXT NOT NULL DEFAULT '',
+            next_calibration_date DATE,
+            notes TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS version_execution_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            task_id INTEGER,
+            execution_date DATE,
+            weather_condition TEXT NOT NULL DEFAULT '',
+            ambient_noise_level REAL,
+            temperature REAL,
+            humidity REAL,
+            environment_notes TEXT NOT NULL DEFAULT '',
+            executor TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE,
+            FOREIGN KEY (task_id) REFERENCES measurement_tasks(id) ON DELETE SET NULL
+        );
     """)
 
     cursor.execute("PRAGMA table_info(measurement_sessions)")
@@ -360,18 +423,20 @@ def init_db():
             review_comment TEXT NOT NULL DEFAULT '',
             parent_version_id INTEGER,
             session_id INTEGER,
+            task_id INTEGER,
             conclusion_snapshot TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (stage_id) REFERENCES stages(id) ON DELETE CASCADE,
             FOREIGN KEY (parent_version_id) REFERENCES measurement_versions(id) ON DELETE SET NULL,
             FOREIGN KEY (session_id) REFERENCES measurement_sessions(id) ON DELETE SET NULL,
+            FOREIGN KEY (task_id) REFERENCES measurement_tasks(id) ON DELETE SET NULL,
             UNIQUE(stage_id, version_number)
         )
     """, [
         "id", "stage_id", "version_number", "version_name", "created_by",
         "update_time", "modification_description", "data_source", "review_status",
         "reviewed_by", "review_time", "review_comment", "parent_version_id",
-        "session_id", "conclusion_snapshot", "created_at"
+        "session_id", "task_id", "conclusion_snapshot", "created_at"
     ])
 
     migrate_table("version_point_snapshots", """
@@ -421,6 +486,93 @@ def init_db():
     """, [
         "id", "version_id", "change_category", "change_detail", "old_value",
         "new_value", "created_at"
+    ])
+
+    migrate_table("version_task_snapshots", """
+        CREATE TABLE version_task_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            task_id INTEGER,
+            task_name TEXT NOT NULL DEFAULT '',
+            responsible_person TEXT NOT NULL DEFAULT '',
+            measurement_date DATE,
+            sampling_start_time TEXT,
+            sampling_end_time TEXT,
+            status TEXT NOT NULL DEFAULT '',
+            site_notes TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE,
+            FOREIGN KEY (task_id) REFERENCES measurement_tasks(id) ON DELETE SET NULL
+        )
+    """, [
+        "id", "version_id", "task_id", "task_name", "responsible_person",
+        "measurement_date", "sampling_start_time", "sampling_end_time",
+        "status", "site_notes"
+    ])
+
+    migrate_table("version_equipment_snapshots", """
+        CREATE TABLE version_equipment_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            equipment_id INTEGER,
+            name TEXT NOT NULL,
+            type TEXT NOT NULL,
+            model TEXT NOT NULL DEFAULT '',
+            serial_number TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT '',
+            calibration_status TEXT NOT NULL DEFAULT '',
+            last_calibration_date DATE,
+            next_calibration_date DATE,
+            calibration_result TEXT NOT NULL DEFAULT '',
+            notes TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE,
+            FOREIGN KEY (equipment_id) REFERENCES equipment(id) ON DELETE SET NULL
+        )
+    """, [
+        "id", "version_id", "equipment_id", "name", "type", "model",
+        "serial_number", "status", "calibration_status",
+        "last_calibration_date", "next_calibration_date", "calibration_result", "notes"
+    ])
+
+    migrate_table("version_calibration_snapshots", """
+        CREATE TABLE version_calibration_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            equipment_id INTEGER,
+            equipment_name TEXT NOT NULL DEFAULT '',
+            calibration_date DATE NOT NULL,
+            calibration_result TEXT NOT NULL,
+            calibration_value REAL,
+            calibrated_by TEXT NOT NULL DEFAULT '',
+            certificate_number TEXT NOT NULL DEFAULT '',
+            next_calibration_date DATE,
+            notes TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE
+        )
+    """, [
+        "id", "version_id", "equipment_id", "equipment_name", "calibration_date",
+        "calibration_result", "calibration_value", "calibrated_by",
+        "certificate_number", "next_calibration_date", "notes"
+    ])
+
+    migrate_table("version_execution_snapshots", """
+        CREATE TABLE version_execution_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version_id INTEGER NOT NULL,
+            task_id INTEGER,
+            execution_date DATE,
+            weather_condition TEXT NOT NULL DEFAULT '',
+            ambient_noise_level REAL,
+            temperature REAL,
+            humidity REAL,
+            environment_notes TEXT NOT NULL DEFAULT '',
+            executor TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (version_id) REFERENCES measurement_versions(id) ON DELETE CASCADE,
+            FOREIGN KEY (task_id) REFERENCES measurement_tasks(id) ON DELETE SET NULL
+        )
+    """, [
+        "id", "version_id", "task_id", "execution_date", "weather_condition",
+        "ambient_noise_level", "temperature", "humidity", "environment_notes",
+        "executor"
     ])
 
     conn.commit()

@@ -35,7 +35,8 @@ def auto_create_version(
     created_by: str = "系统",
     modification_description: str = "",
     data_source: str = "自动版本",
-    session_id: int = None
+    session_id: int = None,
+    task_id: int = None
 ) -> Optional[int]:
     cursor = db.cursor()
     cursor.execute("SELECT id FROM stages WHERE id = ?", (stage_id,))
@@ -61,20 +62,29 @@ def auto_create_version(
         concl_data = {"content": concl_row["content"], "is_confirmed": concl_row["is_confirmed"]}
         conclusion_snapshot = json.dumps(concl_data, ensure_ascii=False)
 
+    if not task_id and session_id:
+        cursor.execute("SELECT task_id FROM measurement_sessions WHERE id = ?", (session_id,))
+        row = cursor.fetchone()
+        if row and row["task_id"]:
+            task_id = row["task_id"]
+
     cursor.execute(
         """INSERT INTO measurement_versions 
            (stage_id, version_number, version_name, created_by, modification_description, 
-            data_source, parent_version_id, session_id, conclusion_snapshot)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            data_source, parent_version_id, session_id, task_id, conclusion_snapshot)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (stage_id, version_number, "", created_by,
          modification_description, data_source,
-         parent_version_id, session_id, conclusion_snapshot)
+         parent_version_id, session_id, task_id, conclusion_snapshot)
     )
     version_id = cursor.lastrowid
 
     snapshot_points(version_id, stage_id, db, parent_version_id)
     snapshot_acoustic_data(version_id, stage_id, db, session_id, parent_version_id)
-    generate_change_logs(version_id, stage_id, db, parent_version_id, session_id, modification_description)
+    snapshot_task(version_id, stage_id, db, task_id, session_id)
+    snapshot_equipment(version_id, db, task_id)
+    snapshot_execution(version_id, db, task_id)
+    generate_change_logs(version_id, stage_id, db, parent_version_id, session_id, modification_description, task_id)
 
     db.commit()
     return version_id
@@ -221,7 +231,7 @@ def compute_statistics(snapshots: list) -> dict:
 
 
 def generate_change_logs(version_id: int, stage_id: int, db, parent_version_id: int = None,
-                         session_id: int = None, modification_description: str = ""):
+                         session_id: int = None, modification_description: str = "", task_id: int = None):
     cursor = db.cursor()
     logs = []
 
@@ -250,6 +260,25 @@ def generate_change_logs(version_id: int, stage_id: int, db, parent_version_id: 
         if ac_stats.get("removed", 0) > 0:
             logs.append(("声学数据", f"删除 {ac_stats['removed']} 个测点的声学数据", None, None))
 
+        cursor.execute("SELECT task_id FROM version_task_snapshots WHERE version_id = ?", (version_id,))
+        cur_task = cursor.fetchone()
+        cursor.execute("SELECT task_id FROM version_task_snapshots WHERE version_id = ?", (parent_version_id,))
+        par_task = cursor.fetchone()
+        if (cur_task and cur_task["task_id"]) != (par_task and par_task["task_id"]):
+            if cur_task and cur_task["task_id"]:
+                cursor.execute("SELECT task_name FROM measurement_tasks WHERE id = ?", (cur_task["task_id"],))
+                t = cursor.fetchone()
+                logs.append(("任务关联", f"关联测量任务: {t['task_name'] if t else '未知任务'}", None, None))
+            else:
+                logs.append(("任务关联", "未关联测量任务", None, None))
+
+        cursor.execute("SELECT COUNT(*) as cnt FROM version_equipment_snapshots WHERE version_id = ?", (version_id,))
+        cur_eq_cnt = cursor.fetchone()["cnt"]
+        cursor.execute("SELECT COUNT(*) as cnt FROM version_equipment_snapshots WHERE version_id = ?", (parent_version_id,))
+        par_eq_cnt = cursor.fetchone()["cnt"]
+        if cur_eq_cnt != par_eq_cnt:
+            logs.append(("设备变更", f"设备数量变化: {par_eq_cnt} -> {cur_eq_cnt}", str(par_eq_cnt), str(cur_eq_cnt)))
+
     cursor.execute(
         "SELECT content, is_confirmed FROM conclusions WHERE stage_id = ? ORDER BY created_at DESC LIMIT 1",
         (stage_id,)
@@ -261,6 +290,12 @@ def generate_change_logs(version_id: int, stage_id: int, db, parent_version_id: 
     if session_id:
         logs.append(("数据来源", f"基于测量场次 #{session_id} 创建", None, None))
 
+    if task_id:
+        cursor.execute("SELECT task_name, responsible_person FROM measurement_tasks WHERE id = ?", (task_id,))
+        t = cursor.fetchone()
+        if t:
+            logs.append(("任务背景", f"任务: {t['task_name']}, 负责人: {t['responsible_person'] or '未指定'}", None, None))
+
     if modification_description:
         logs.append(("修改说明", modification_description, None, None))
 
@@ -269,6 +304,126 @@ def generate_change_logs(version_id: int, stage_id: int, db, parent_version_id: 
             "INSERT INTO version_change_logs (version_id, change_category, change_detail, old_value, new_value) VALUES (?, ?, ?, ?, ?)",
             (version_id, category, detail, old_val, new_val)
         )
+
+
+def snapshot_task(version_id: int, stage_id: int, db, task_id: int = None, session_id: int = None):
+    cursor = db.cursor()
+
+    if not task_id and session_id:
+        cursor.execute("SELECT task_id FROM measurement_sessions WHERE id = ?", (session_id,))
+        row = cursor.fetchone()
+        if row and row["task_id"]:
+            task_id = row["task_id"]
+
+    if not task_id:
+        return
+
+    cursor.execute("SELECT * FROM measurement_tasks WHERE id = ? AND stage_id = ?", (task_id, stage_id))
+    task = cursor.fetchone()
+    if not task:
+        return
+
+    cursor.execute("""
+        INSERT INTO version_task_snapshots 
+        (version_id, task_id, task_name, responsible_person, measurement_date,
+         sampling_start_time, sampling_end_time, status, site_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        version_id, task["id"], task["task_name"], task["responsible_person"],
+        task["measurement_date"], task["sampling_start_time"], task["sampling_end_time"],
+        task["status"], task["site_notes"]
+    ))
+
+
+def snapshot_equipment(version_id: int, db, task_id: int = None):
+    cursor = db.cursor()
+
+    equipment_list = []
+    if task_id:
+        cursor.execute("""
+            SELECT e.* 
+            FROM equipment e
+            JOIN task_equipment te ON e.id = te.equipment_id
+            WHERE te.task_id = ?
+            ORDER BY e.type, e.name
+        """, (task_id,))
+        equipment_list = cursor.fetchall()
+    else:
+        cursor.execute("SELECT * FROM equipment WHERE status = 'available' ORDER BY type, name")
+        equipment_list = cursor.fetchall()
+
+    for eq in equipment_list:
+        cursor.execute("""
+            SELECT calibration_date, calibration_result, calibrated_by
+            FROM equipment_calibration 
+            WHERE equipment_id = ?
+            ORDER BY calibration_date DESC
+            LIMIT 1
+        """, (eq["id"],))
+        cal = cursor.fetchone()
+
+        calibration_status = "unknown"
+        if cal:
+            if cal["calibration_result"] == "合格":
+                calibration_status = "valid"
+            elif cal["calibration_result"] == "不合格":
+                calibration_status = "invalid"
+            else:
+                calibration_status = "pending"
+
+        cursor.execute("""
+            INSERT INTO version_equipment_snapshots
+            (version_id, equipment_id, name, type, model, serial_number, status,
+             calibration_status, last_calibration_date, next_calibration_date,
+             calibration_result, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            version_id, eq["id"], eq["name"], eq["type"], eq["model"],
+            eq["serial_number"], eq["status"], calibration_status,
+            eq["last_calibration_date"], eq["next_calibration_date"],
+            cal["calibration_result"] if cal else "", eq["notes"]
+        ))
+
+        if cal:
+            cursor.execute("""
+                INSERT INTO version_calibration_snapshots
+                (version_id, equipment_id, equipment_name, calibration_date,
+                 calibration_result, calibration_value, calibrated_by,
+                 certificate_number, next_calibration_date, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                version_id, eq["id"], eq["name"], cal["calibration_date"],
+                cal["calibration_result"], cal.get("calibration_value"),
+                cal["calibrated_by"], cal["certificate_number"],
+                cal["next_calibration_date"], cal["notes"]
+            ))
+
+
+def snapshot_execution(version_id: int, db, task_id: int = None):
+    cursor = db.cursor()
+
+    if not task_id:
+        return
+
+    cursor.execute("""
+        SELECT * FROM task_execution_records
+        WHERE task_id = ?
+        ORDER BY created_at DESC
+    """, (task_id,))
+    records = cursor.fetchall()
+
+    for rec in records:
+        cursor.execute("""
+            INSERT INTO version_execution_snapshots
+            (version_id, task_id, execution_date, weather_condition,
+             ambient_noise_level, temperature, humidity, environment_notes, executor)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            version_id, rec["task_id"], rec["execution_date"],
+            rec["weather_condition"], rec["ambient_noise_level"],
+            rec["temperature"], rec["humidity"], rec["environment_notes"],
+            rec["executor"]
+        ))
 
 
 def status_map_val(s):
@@ -413,6 +568,94 @@ def compare_two_versions(va_id: int, vb_id: int, stage_id: int, db) -> dict:
         "unchanged": sum(1 for d in acoustic_diffs if d["status"] == "unchanged"),
     }
 
+    cursor.execute("SELECT * FROM version_task_snapshots WHERE version_id = ?", (va_id,))
+    va_task_row = cursor.fetchone()
+    va_task = dict(va_task_row) if va_task_row else None
+    cursor.execute("SELECT * FROM version_task_snapshots WHERE version_id = ?", (vb_id,))
+    vb_task_row = cursor.fetchone()
+    vb_task = dict(vb_task_row) if vb_task_row else None
+
+    task_changed = False
+    task_diff_fields = []
+    if va_task and vb_task:
+        for field in ["task_name", "responsible_person", "measurement_date", "status"]:
+            if va_task.get(field) != vb_task.get(field):
+                task_changed = True
+                task_diff_fields.append(field)
+    elif bool(va_task) != bool(vb_task):
+        task_changed = True
+
+    cursor.execute(
+        "SELECT * FROM version_equipment_snapshots WHERE version_id = ? ORDER BY name",
+        (va_id,)
+    )
+    va_equipment = {row["name"]: dict(row) for row in cursor.fetchall()}
+    cursor.execute(
+        "SELECT * FROM version_equipment_snapshots WHERE version_id = ? ORDER BY name",
+        (vb_id,)
+    )
+    vb_equipment = {row["name"]: dict(row) for row in cursor.fetchall()}
+
+    all_equipment_names = sorted(set(list(va_equipment.keys()) + list(vb_equipment.keys())))
+    equipment_diffs = []
+    for name in all_equipment_names:
+        ea = va_equipment.get(name)
+        eb = vb_equipment.get(name)
+        status = "unchanged"
+        changes = []
+        if ea and eb:
+            for field in ["type", "model", "serial_number", "status", "calibration_status", "last_calibration_date", "next_calibration_date"]:
+                if ea.get(field) != eb.get(field):
+                    changes.append(field)
+            if changes:
+                status = "modified"
+        elif ea and not eb:
+            status = "removed_in_b"
+        elif not ea and eb:
+            status = "added_in_b"
+        equipment_diffs.append({
+            "name": name, "eq_a": ea, "eq_b": eb,
+            "status": status, "changes": changes
+        })
+
+    equipment_change_counts = {
+        "added": sum(1 for d in equipment_diffs if d["status"] == "added_in_b"),
+        "removed": sum(1 for d in equipment_diffs if d["status"] == "removed_in_b"),
+        "modified": sum(1 for d in equipment_diffs if d["status"] == "modified"),
+        "unchanged": sum(1 for d in equipment_diffs if d["status"] == "unchanged"),
+    }
+
+    cursor.execute(
+        "SELECT * FROM version_execution_snapshots WHERE version_id = ? ORDER BY execution_date DESC",
+        (va_id,)
+    )
+    va_executions = [dict(row) for row in cursor.fetchall()]
+    cursor.execute(
+        "SELECT * FROM version_execution_snapshots WHERE version_id = ? ORDER BY execution_date DESC",
+        (vb_id,)
+    )
+    vb_executions = [dict(row) for row in cursor.fetchall()]
+
+    def env_diff_summary(recs_a, recs_b):
+        if not recs_a and not recs_b:
+            return "both_empty"
+        if not recs_a:
+            return "b_only"
+        if not recs_b:
+            return "a_only"
+        if len(recs_a) != len(recs_b):
+            return "count_diff"
+        changed_fields = set()
+        for i in range(min(len(recs_a), len(recs_b))):
+            for f in ["weather_condition", "ambient_noise_level", "temperature", "humidity", "executor"]:
+                if recs_a[i].get(f) != recs_b[i].get(f):
+                    changed_fields.add(f)
+        if changed_fields:
+            return list(changed_fields)
+        return "unchanged"
+
+    environment_diff_status = env_diff_summary(va_executions, vb_executions)
+
     return {
         "version_a": va, "version_b": vb,
         "point_diffs": point_diffs, "acoustic_diffs": acoustic_diffs,
@@ -422,6 +665,12 @@ def compare_two_versions(va_id: int, vb_id: int, stage_id: int, db) -> dict:
         "conclusion_needs_review": conclusion_needs_review,
         "point_change_counts": point_change_counts,
         "acoustic_change_counts": acoustic_change_counts,
+        "task_a": va_task, "task_b": vb_task,
+        "task_changed": task_changed, "task_diff_fields": task_diff_fields,
+        "equipment_diffs": equipment_diffs,
+        "equipment_change_counts": equipment_change_counts,
+        "executions_a": va_executions, "executions_b": vb_executions,
+        "environment_diff_status": environment_diff_status,
     }
 
 
@@ -462,8 +711,17 @@ def version_list(request: Request, stage_id: int, db=Depends(get_db)):
     """, (stage_id,))
     sessions = [dict(row) for row in cursor.fetchall()]
 
+    cursor.execute("""
+        SELECT mt.id, mt.task_name, mt.responsible_person, mt.status, mt.measurement_date
+        FROM measurement_tasks mt
+        WHERE mt.stage_id = ?
+        ORDER BY mt.created_at DESC
+    """, (stage_id,))
+    tasks = [dict(row) for row in cursor.fetchall()]
+
     return templates.TemplateResponse("version_list.html", {
-        "request": request, "stage": stage, "versions": versions, "sessions": sessions
+        "request": request, "stage": stage, "versions": versions,
+        "sessions": sessions, "tasks": tasks
     })
 
 
@@ -477,6 +735,7 @@ def create_version(
     data_source: str = Form(""),
     parent_version_id: Optional[int] = Form(None),
     session_id: Optional[int] = Form(None),
+    task_id: Optional[int] = Form(None),
     db=Depends(get_db)
 ):
     cursor = db.cursor()
@@ -500,6 +759,20 @@ def create_version(
         if not cursor.fetchone():
             session_id = None
 
+    if task_id:
+        cursor.execute(
+            "SELECT id FROM measurement_tasks WHERE id = ? AND stage_id = ?",
+            (task_id, stage_id)
+        )
+        if not cursor.fetchone():
+            task_id = None
+
+    if not task_id and session_id:
+        cursor.execute("SELECT task_id FROM measurement_sessions WHERE id = ?", (session_id,))
+        row = cursor.fetchone()
+        if row and row["task_id"]:
+            task_id = row["task_id"]
+
     version_number = generate_version_number(stage_id, db)
 
     cursor.execute(
@@ -515,17 +788,20 @@ def create_version(
     cursor.execute(
         """INSERT INTO measurement_versions 
            (stage_id, version_number, version_name, created_by, modification_description, 
-            data_source, parent_version_id, session_id, conclusion_snapshot)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            data_source, parent_version_id, session_id, task_id, conclusion_snapshot)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (stage_id, version_number, version_name.strip(), created_by.strip(),
          modification_description.strip(), data_source.strip(),
-         parent_version_id, session_id, conclusion_snapshot)
+         parent_version_id, session_id, task_id, conclusion_snapshot)
     )
     version_id = cursor.lastrowid
 
     snapshot_points(version_id, stage_id, db, parent_version_id)
     snapshot_acoustic_data(version_id, stage_id, db, session_id, parent_version_id)
-    generate_change_logs(version_id, stage_id, db, parent_version_id, session_id, modification_description)
+    snapshot_task(version_id, stage_id, db, task_id, session_id)
+    snapshot_equipment(version_id, db, task_id)
+    snapshot_execution(version_id, db, task_id)
+    generate_change_logs(version_id, stage_id, db, parent_version_id, session_id, modification_description, task_id)
 
     db.commit()
     return RedirectResponse(url=f"/stages/{stage_id}/versions/{version_id}", status_code=303)
@@ -637,11 +913,58 @@ def version_detail(request: Request, stage_id: int, version_id: int, db=Depends(
     """, (stage_id, version_id))
     other_versions = [dict(row) for row in cursor.fetchall()]
 
+    cursor.execute(
+        "SELECT * FROM version_task_snapshots WHERE version_id = ?",
+        (version_id,)
+    )
+    task_snapshot_row = cursor.fetchone()
+    task_snapshot = dict(task_snapshot_row) if task_snapshot_row else None
+
+    cursor.execute(
+        "SELECT * FROM version_equipment_snapshots WHERE version_id = ? ORDER BY type, name",
+        (version_id,)
+    )
+    equipment_snapshots = [dict(row) for row in cursor.fetchall()]
+
+    cursor.execute(
+        "SELECT * FROM version_calibration_snapshots WHERE version_id = ? ORDER BY calibration_date DESC",
+        (version_id,)
+    )
+    calibration_snapshots = [dict(row) for row in cursor.fetchall()]
+
+    cursor.execute(
+        "SELECT * FROM version_execution_snapshots WHERE version_id = ? ORDER BY execution_date DESC",
+        (version_id,)
+    )
+    execution_snapshots = [dict(row) for row in cursor.fetchall()]
+
+    task_status_map = {
+        "planned": "计划中",
+        "in_progress": "进行中",
+        "completed": "已完成",
+        "cancelled": "已取消"
+    }
+    if task_snapshot:
+        task_snapshot["status_text"] = task_status_map.get(task_snapshot["status"], task_snapshot["status"])
+
+    cal_status_map = {
+        "valid": "校准有效",
+        "invalid": "校准失效",
+        "pending": "待确认",
+        "unknown": "未知"
+    }
+    for eq in equipment_snapshots:
+        eq["calibration_status_text"] = cal_status_map.get(eq["calibration_status"], eq["calibration_status"])
+
     return templates.TemplateResponse("version_detail.html", {
         "request": request, "stage": stage, "version": version,
         "point_snapshots": point_snapshots, "acoustic_snapshots": acoustic_snapshots,
         "statistics": statistics, "change_logs": change_logs,
-        "conclusion_data": conclusion_data, "other_versions": other_versions
+        "conclusion_data": conclusion_data, "other_versions": other_versions,
+        "task_snapshot": task_snapshot,
+        "equipment_snapshots": equipment_snapshots,
+        "calibration_snapshots": calibration_snapshots,
+        "execution_snapshots": execution_snapshots
     })
 
 

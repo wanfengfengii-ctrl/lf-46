@@ -105,6 +105,9 @@
 <div class="tab-bar">
     <a href="javascript:void(0)" class="active" onclick="showCmpTab(event, 'points')">测量点差异</a>
     <a href="javascript:void(0)" onclick="showCmpTab(event, 'acoustic')">声学数据差异</a>
+    <a href="javascript:void(0)" onclick="showCmpTab(event, 'task')">任务背景差异</a>
+    <a href="javascript:void(0)" onclick="showCmpTab(event, 'equipment')">设备与校准差异</a>
+    <a href="javascript:void(0)" onclick="showCmpTab(event, 'environment')">执行环境差异</a>
     <a href="javascript:void(0)" onclick="showCmpTab(event, 'stats')">统计对比</a>
     <a href="javascript:void(0)" onclick="showCmpTab(event, 'conclusion')">结论对比</a>
 </div>
@@ -146,6 +149,231 @@
                 {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
+
+<div id="tab-task" class="cmp-tab" style="display:none;">
+    <div class="card">
+        <h2>任务背景差异</h2>
+        {% if result.task_a or result.task_b %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            <div>
+                <h3 style="color:var(--info);margin-bottom:0.8rem;">版本 A 任务背景</h3>
+                {% if result.task_a %}
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:0.5rem 1rem;font-size:0.9rem;">
+                    <span style="color:var(--text-light);">任务名称：</span>
+                    <span style="font-weight:600;">{{ result.task_a.task_name }}</span>
+                    <span style="color:var(--text-light);">负责人：</span>
+                    <span>{{ result.task_a.responsible_person or '未指定' }}</span>
+                    <span style="color:var(--text-light);">测量日期：</span>
+                    <span>{{ result.task_a.measurement_date or '-' }}</span>
+                    <span style="color:var(--text-light);">任务状态：</span>
+                    <span>{{ result.task_a.status }}</span>
+                </div>
+                {% else %}
+                <p class="missing-indicator">版本 A 未关联任务</p>
+                {% endif %}
+            </div>
+            <div>
+                <h3 style="color:var(--primary);margin-bottom:0.8rem;">版本 B 任务背景</h3>
+                {% if result.task_b %}
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:0.5rem 1rem;font-size:0.9rem;">
+                    <span style="color:var(--text-light);">任务名称：</span>
+                    <span style="font-weight:600;">{{ result.task_b.task_name }}</span>
+                    <span style="color:var(--text-light);">负责人：</span>
+                    <span>{{ result.task_b.responsible_person or '未指定' }}</span>
+                    <span style="color:var(--text-light);">测量日期：</span>
+                    <span>{{ result.task_b.measurement_date or '-' }}</span>
+                    <span style="color:var(--text-light);">任务状态：</span>
+                    <span>{{ result.task_b.status }}</span>
+                </div>
+                {% else %}
+                <p class="missing-indicator">版本 B 未关联任务</p>
+                {% endif %}
+            </div>
+        </div>
+        {% if result.task_changed %}
+        <div class="alert alert-warning" style="margin-top:1rem;">
+            <strong>任务背景已变化</strong>：两个版本的测量任务存在差异，请关注任务负责人、测量时间等因素对声学数据的潜在影响。
+        </div>
+        {% else %}
+        <div class="alert alert-info" style="margin-top:1rem;">
+            <strong>任务背景一致</strong>：两个版本关联同一测量任务，实验背景具有可比性。
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">两个版本均未关联测量任务</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-equipment" class="cmp-tab" style="display:none;">
+    <div class="card">
+        <h2>设备与校准差异</h2>
+        {% if result.equipment_diffs %}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));gap:0.8rem;margin-bottom:1rem;">
+            <div style="text-align:center;padding:0.6rem;border-radius:8px;background:#d4edda;">
+                <div style="font-size:1.2rem;font-weight:700;color:#155724;">{{ result.equipment_change_counts.added }}</div>
+                <div style="font-size:0.75rem;color:#155724;">设备新增</div>
+            </div>
+            <div style="text-align:center;padding:0.6rem;border-radius:8px;background:#fff3cd;">
+                <div style="font-size:1.2rem;font-weight:700;color:#856404;">{{ result.equipment_change_counts.modified }}</div>
+                <div style="font-size:0.75rem;color:#856404;">设备变更</div>
+            </div>
+            <div style="text-align:center;padding:0.6rem;border-radius:8px;background:#f8d7da;">
+                <div style="font-size:1.2rem;font-weight:700;color:#721c24;">{{ result.equipment_change_counts.removed }}</div>
+                <div style="font-size:0.75rem;color:#721c24;">设备移除</div>
+            </div>
+            <div style="text-align:center;padding:0.6rem;border-radius:8px;background:#d1ecf1;">
+                <div style="font-size:1.2rem;font-weight:700;color:#0c5460;">{{ result.equipment_change_counts.unchanged }}</div>
+                <div style="font-size:0.75rem;color:#0c5460;">设备未变</div>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>设备名称</th>
+                    <th>版本 A - 状态</th>
+                    <th>版本 A - 校准</th>
+                    <th>版本 B - 状态</th>
+                    <th>版本 B - 校准</th>
+                    <th>差异</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in result.equipment_diffs %}
+                <tr {% if d.status != 'unchanged' %}style="background:rgba(255,243,205,0.3);"{% endif %}>
+                    <td style="font-weight:600;">{{ d.name }}</td>
+                    <td>{{ d.eq_a.status if d.eq_a else '-' }}</td>
+                    <td>
+                        {% if d.eq_a %}
+                            {% if d.eq_a.calibration_status == 'valid' %}
+                            <span class="badge badge-success">校准有效</span>
+                            {% elif d.eq_a.calibration_status == 'invalid' %}
+                            <span class="badge badge-danger">校准失效</span>
+                            {% elif d.eq_a.calibration_status == 'pending' %}
+                            <span class="badge badge-warning">待确认</span>
+                            {% else %}
+                            <span class="badge badge-info">未知</span>
+                            {% endif %}
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>{{ d.eq_b.status if d.eq_b else '-' }}</td>
+                    <td>
+                        {% if d.eq_b %}
+                            {% if d.eq_b.calibration_status == 'valid' %}
+                            <span class="badge badge-success">校准有效</span>
+                            {% elif d.eq_b.calibration_status == 'invalid' %}
+                            <span class="badge badge-danger">校准失效</span>
+                            {% elif d.eq_b.calibration_status == 'pending' %}
+                            <span class="badge badge-warning">待确认</span>
+                            {% else %}
+                            <span class="badge badge-info">未知</span>
+                            {% endif %}
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>
+                        {% if d.status == 'unchanged' %}
+                        <span class="badge badge-info">未变化</span>
+                        {% elif d.status == 'modified' %}
+                        <span class="badge badge-warning">已修改</span>
+                        {% elif d.status == 'added_in_b' %}
+                        <span class="badge badge-success">B中新增</span>
+                        {% elif d.status == 'removed_in_b' %}
+                        <span class="badge badge-danger">B中删除</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if result.equipment_change_counts.modified > 0 or result.equipment_change_counts.added > 0 or result.equipment_change_counts.removed > 0 %}
+        <div class="alert alert-warning" style="margin-top:1rem;">
+            <strong>设备配置已变化</strong>：设备或校准状态存在差异，这可能影响声学测量结果的可比性，请注意分析设备因素的影响。
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">两个版本均未记录设备信息</p>
+        {% endif %}
+    </div>
+</div>
+
+<div id="tab-environment" class="cmp-tab" style="display:none;">
+    <div class="card">
+        <h2>执行环境差异</h2>
+        {% if result.executions_a or result.executions_b %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+            <div>
+                <h3 style="color:var(--info);margin-bottom:0.8rem;">版本 A 执行环境</h3>
+                {% if result.executions_a %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>天气</th>
+                            <th>噪声(dB)</th>
+                            <th>温度(°C)</th>
+                            <th>湿度(%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in result.executions_a %}
+                        <tr>
+                            <td style="font-size:0.85rem;">{{ rec.execution_date or '-' }}</td>
+                            <td>{{ rec.weather_condition or '-' }}</td>
+                            <td>{{ '%.1f'|format(rec.ambient_noise_level) if rec.ambient_noise_level is not none else '-' }}</td>
+                            <td>{{ '%.1f'|format(rec.temperature) if rec.temperature is not none else '-' }}</td>
+                            <td>{{ '%.1f'|format(rec.humidity) if rec.humidity is not none else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="missing-indicator">版本 A 无执行环境记录</p>
+                {% endif %}
+            </div>
+            <div>
+                <h3 style="color:var(--primary);margin-bottom:0.8rem;">版本 B 执行环境</h3>
+                {% if result.executions_b %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>天气</th>
+                            <th>噪声(dB)</th>
+                            <th>温度(°C)</th>
+                            <th>湿度(%)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rec in result.executions_b %}
+                        <tr>
+                            <td style="font-size:0.85rem;">{{ rec.execution_date or '-' }}</td>
+                            <td>{{ rec.weather_condition or '-' }}</td>
+                            <td>{{ '%.1f'|format(rec.ambient_noise_level) if rec.ambient_noise_level is not none else '-' }}</td>
+                            <td>{{ '%.1f'|format(rec.temperature) if rec.temperature is not none else '-' }}</td>
+                            <td>{{ '%.1f'|format(rec.humidity) if rec.humidity is not none else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="missing-indicator">版本 B 无执行环境记录</p>
+                {% endif %}
+            </div>
+        </div>
+        {% if result.environment_diff_status != 'unchanged' and result.environment_diff_status != 'both_empty' %}
+        <div class="alert alert-warning" style="margin-top:1rem;">
+            <strong>执行环境已变化</strong>：环境条件存在差异，温度、湿度、背景噪声等环境因素可能影响声学测量结果。
+        </div>
+        {% elif result.environment_diff_status == 'unchanged' %}
+        <div class="alert alert-info" style="margin-top:1rem;">
+            <strong>执行环境一致</strong>：两个版本的执行环境记录相同，环境因素具有可比性。
+        </div>
+        {% endif %}
+        {% else %}
+        <p style="color:var(--text-light);text-align:center;">两个版本均未记录执行环境信息</p>
+        {% endif %}
     </div>
 </div>
 
