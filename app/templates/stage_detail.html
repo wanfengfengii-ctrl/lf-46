@@ -33,9 +33,9 @@
 </div>
 
 <div class="tab-bar">
-    <a href="#tasks" class="active" onclick="showStageTab('tasks')">测量任务</a>
+    <a href="javascript:void(0)" class="active" onclick="showStageTab(event, 'tasks')">测量任务</a>
     <a href="/stages/{{ stage.id }}/points" class="">测量点管理</a>
-    <a href="#sessions" onclick="showStageTab('sessions')">测量场次</a>
+    <a href="javascript:void(0)" onclick="showStageTab(event, 'sessions')">测量场次</a>
 </div>
 
 <div id="tab-tasks" class="stage-tab">
@@ -198,19 +198,23 @@
 </div>
 
 <script>
-function showStageTab(tabName) {
-    document.querySelectorAll('.stage-tab').forEach(tab => {
+function showStageTab(e, tabName) {
+    e.preventDefault();
+    document.querySelectorAll('.stage-tab').forEach(function(tab) {
         tab.style.display = 'none';
     });
-    document.querySelectorAll('.tab-bar a').forEach(link => {
-        link.classList.remove('active');
-    });
-    const tabElement = document.getElementById('tab-' + tabName);
+    var tabLinks = document.querySelectorAll('.tab-bar a');
+    for (var i = 0; i < tabLinks.length; i++) {
+        var link = tabLinks[i];
+        if (link.getAttribute('onclick') && link.getAttribute('onclick').indexOf('showStageTab') !== -1) {
+            link.classList.remove('active');
+        }
+    }
+    var tabElement = document.getElementById('tab-' + tabName);
     if (tabElement) {
         tabElement.style.display = 'block';
     }
-    event.target.classList.add('active');
-    event.preventDefault();
+    e.currentTarget.classList.add('active');
 }
 </script>
 {% endblock %}

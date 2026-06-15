@@ -93,10 +93,10 @@
 </div>
 
 <div class="tab-bar">
-    <a href="#equipment" class="active" onclick="showTab('equipment')">设备清单</a>
-    <a href="#sessions" onclick="showTab('sessions')">测量场次</a>
-    <a href="#execution" onclick="showTab('execution')">执行记录</a>
-    <a href="#photos" onclick="showTab('photos')">现场照片</a>
+    <a href="javascript:void(0)" class="active" onclick="showTab(event, 'equipment')">设备清单</a>
+    <a href="javascript:void(0)" onclick="showTab(event, 'sessions')">测量场次</a>
+    <a href="javascript:void(0)" onclick="showTab(event, 'execution')">执行记录</a>
+    <a href="javascript:void(0)" onclick="showTab(event, 'photos')">现场照片</a>
 </div>
 
 <div id="tab-equipment" class="tab-content">
@@ -161,10 +161,7 @@
                     <td>{{ e.last_calibration_date or '-' }}</td>
                     <td>
                         {% if e.next_calibration_date %}
-                        {% set days_remaining = (e.next_calibration_date | string) | to_datetime - now %}
                         {% if e.next_calibration_date < today %}
-                        <span class="badge badge-danger">已过期</span>
-                        {% elif (e.next_calibration_date | string) <= (today | string) %}
                         <span class="badge badge-danger">已过期</span>
                         {% else %}
                         {{ e.next_calibration_date }}
@@ -410,15 +407,21 @@
 </div>
 
 <script>
-function showTab(tabName) {
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.style.display = 'none';
-    });
-    document.querySelectorAll('.tab-bar a').forEach(link => {
-        link.classList.remove('active');
-    });
-    document.getElementById('tab-' + tabName).style.display = 'block';
-    event.target.classList.add('active');
+function showTab(e, tabName) {
+    e.preventDefault();
+    var tabs = document.querySelectorAll('.tab-content');
+    for (var i = 0; i < tabs.length; i++) {
+        tabs[i].style.display = 'none';
+    }
+    var links = document.querySelectorAll('.tab-bar a');
+    for (var j = 0; j < links.length; j++) {
+        links[j].classList.remove('active');
+    }
+    var targetTab = document.getElementById('tab-' + tabName);
+    if (targetTab) {
+        targetTab.style.display = 'block';
+    }
+    e.currentTarget.classList.add('active');
 }
 </script>
 
