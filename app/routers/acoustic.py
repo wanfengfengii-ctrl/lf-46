@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from ..database import get_db
 from ..validators import validate_acoustic_values, invalidate_heatmaps
+from .versions import auto_create_version
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -48,6 +49,9 @@ def save_acoustic_data(request: Request, stage_id: int, session_id: int,
 
     invalidate_heatmaps(session_id, db)
     db.commit()
+    auto_create_version(stage_id, db, created_by="系统",
+                        modification_description="保存/更新声学数据",
+                        session_id=session_id)
     return RedirectResponse(url=f"/stages/{stage_id}/sessions/{session_id}", status_code=303)
 
 
@@ -112,6 +116,10 @@ async def batch_import(request: Request, stage_id: int, session_id: int,
 
     if errors:
         raise HTTPException(status_code=400, detail="批量导入部分失败:\n" + "\n".join(errors))
+
+    auto_create_version(stage_id, db, created_by="系统",
+                        modification_description="批量导入声学数据",
+                        session_id=session_id)
     return RedirectResponse(url=f"/stages/{stage_id}/sessions/{session_id}", status_code=303)
 
 
@@ -124,4 +132,7 @@ def delete_acoustic_data(stage_id: int, session_id: int, data_id: int, db=Depend
     cursor.execute("DELETE FROM acoustic_data WHERE id = ?", (data_id,))
     invalidate_heatmaps(session_id, db)
     db.commit()
+    auto_create_version(stage_id, db, created_by="系统",
+                        modification_description="删除声学数据",
+                        session_id=session_id)
     return RedirectResponse(url=f"/stages/{stage_id}/sessions/{session_id}", status_code=303)

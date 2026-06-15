@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from ..database import get_db
 from ..validators import check_abnormal_data
+from .versions import auto_create_version
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -25,6 +26,8 @@ def create_conclusion(request: Request, stage_id: int, content: str = Form(...),
         (stage_id, content.strip(), int(has_abnormal), 0),
     )
     db.commit()
+    auto_create_version(stage_id, db, created_by="系统",
+                        modification_description="新增分析结论")
     return RedirectResponse(url=f"/stages/{stage_id}", status_code=303)
 
 
@@ -41,6 +44,8 @@ def confirm_conclusion(stage_id: int, conclusion_id: int, db=Depends(get_db)):
 
     cursor.execute("UPDATE conclusions SET is_confirmed = 1 WHERE id = ?", (conclusion_id,))
     db.commit()
+    auto_create_version(stage_id, db, created_by="系统",
+                        modification_description="确认分析结论")
     return RedirectResponse(url=f"/stages/{stage_id}", status_code=303)
 
 
@@ -52,4 +57,6 @@ def delete_conclusion(stage_id: int, conclusion_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="结论不存在")
     cursor.execute("DELETE FROM conclusions WHERE id = ?", (conclusion_id,))
     db.commit()
+    auto_create_version(stage_id, db, created_by="系统",
+                        modification_description="删除分析结论")
     return RedirectResponse(url=f"/stages/{stage_id}", status_code=303)

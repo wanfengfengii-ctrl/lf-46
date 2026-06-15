@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, HTTPException, Form, Query
@@ -13,11 +14,70 @@ templates = Jinja2Templates(directory="app/templates")
 def generate_version_number(stage_id: int, db) -> str:
     cursor = db.cursor()
     cursor.execute(
-        "SELECT COUNT(*) FROM measurement_versions WHERE stage_id = ?",
+        "SELECT version_number FROM measurement_versions WHERE stage_id = ?",
         (stage_id,)
     )
-    count = cursor.fetchone()[0]
-    return f"v{count + 1}.0"
+    rows = cursor.fetchall()
+    max_num = 0
+    pattern = re.compile(r"^v(\d+)\.")
+    for row in rows:
+        m = pattern.match(row["version_number"])
+        if m:
+            num = int(m.group(1))
+            if num > max_num:
+                max_num = num
+    return f"v{max_num + 1}.0"
+
+
+def auto_create_version(
+    stage_id: int,
+    db,
+    created_by: str = "系统",
+    modification_description: str = "",
+    data_source: str = "自动版本",
+    session_id: int = None
+) -> Optional[int]:
+    cursor = db.cursor()
+    cursor.execute("SELECT id FROM stages WHERE id = ?", (stage_id,))
+    if not cursor.fetchone():
+        return None
+
+    cursor.execute(
+        "SELECT id FROM measurement_versions WHERE stage_id = ? ORDER BY created_at DESC LIMIT 1",
+        (stage_id,)
+    )
+    latest = cursor.fetchone()
+    parent_version_id = latest["id"] if latest else None
+
+    version_number = generate_version_number(stage_id, db)
+
+    cursor.execute(
+        "SELECT content, is_confirmed FROM conclusions WHERE stage_id = ? ORDER BY created_at DESC LIMIT 1",
+        (stage_id,)
+    )
+    concl_row = cursor.fetchone()
+    conclusion_snapshot = ""
+    if concl_row:
+        concl_data = {"content": concl_row["content"], "is_confirmed": concl_row["is_confirmed"]}
+        conclusion_snapshot = json.dumps(concl_data, ensure_ascii=False)
+
+    cursor.execute(
+        """INSERT INTO measurement_versions 
+           (stage_id, version_number, version_name, created_by, modification_description, 
+            data_source, parent_version_id, session_id, conclusion_snapshot)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (stage_id, version_number, "", created_by,
+         modification_description, data_source,
+         parent_version_id, session_id, conclusion_snapshot)
+    )
+    version_id = cursor.lastrowid
+
+    snapshot_points(version_id, stage_id, db, parent_version_id)
+    snapshot_acoustic_data(version_id, stage_id, db, session_id, parent_version_id)
+    generate_change_logs(version_id, stage_id, db, parent_version_id, session_id, modification_description)
+
+    db.commit()
+    return version_id
 
 
 def snapshot_points(version_id: int, stage_id: int, db, parent_version_id: int = None):
@@ -608,7 +668,8 @@ def review_version(
 
     cursor.execute(
         """UPDATE measurement_versions 
-           SET review_status = ?, reviewed_by = ?, review_comment = ?, review_time = CURRENT_TIMESTAMP
+           SET review_status = ?, reviewed_by = ?, review_comment = ?, review_time = CURRENT_TIMESTAMP,
+               update_time = CURRENT_TIMESTAMP
            WHERE id = ?""",
         (review_status, reviewed_by.strip(), review_comment.strip(), version_id)
     )

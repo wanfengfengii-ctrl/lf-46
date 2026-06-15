@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from ..database import get_db
 from ..validators import validate_coordinates, invalidate_heatmaps
+from .versions import auto_create_version
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -37,6 +38,7 @@ def create_point(request: Request, stage_id: int, label: str = Form(...),
         (stage_id, label.strip(), x, y),
     )
     db.commit()
+    auto_create_version(stage_id, db, created_by="系统", modification_description=f"新增测量点: {label.strip()}")
     return RedirectResponse(url=f"/stages/{stage_id}/points", status_code=303)
 
 
@@ -65,15 +67,19 @@ def edit_point(request: Request, stage_id: int, point_id: int, label: str = Form
         invalidate_heatmaps(sid, db)
 
     db.commit()
+    auto_create_version(stage_id, db, created_by="系统", modification_description=f"修改测量点: {label.strip()}")
     return RedirectResponse(url=f"/stages/{stage_id}/points", status_code=303)
 
 
 @router.post("/stages/{stage_id}/points/{point_id}/delete")
 def delete_point(stage_id: int, point_id: int, db=Depends(get_db)):
     cursor = db.cursor()
-    cursor.execute("SELECT id FROM measurement_points WHERE id = ? AND stage_id = ?", (point_id, stage_id))
-    if not cursor.fetchone():
+    cursor.execute("SELECT id, label FROM measurement_points WHERE id = ? AND stage_id = ?", (point_id, stage_id))
+    point = cursor.fetchone()
+    if not point:
         raise HTTPException(status_code=404, detail="测量点不存在")
+    point_label = point["label"]
     cursor.execute("DELETE FROM measurement_points WHERE id = ?", (point_id,))
     db.commit()
+    auto_create_version(stage_id, db, created_by="系统", modification_description=f"删除测量点: {point_label}")
     return RedirectResponse(url=f"/stages/{stage_id}/points", status_code=303)
