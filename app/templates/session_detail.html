@@ -34,7 +34,7 @@
         <div class="point-marker {% if has_data %}has-data{% else %}missing-data{% endif %}"
              style="left:{{ (p.x / stage.plan_width * 100) }}%;top:{{ (p.y / stage.plan_height * 100) }}%;"
              title="{{ p.label }} {% if has_data %}(已录入){% else %}(未录入){% endif %}"
-             onclick="openDataForm({{ p.id }}, '{{ p.label }}', {% if has_data %}{{ has_data.sound_pressure or 'null' }},{{ has_data.reverberation_time or 'null' }},{{ has_data.speech_clarity or 'null' }}{% else %}null,null,null{% endif %})">
+             onclick="openDataForm({{ p.id }}, '{{ p.label }}', {% if has_data %}{% if has_data.sound_pressure is not none %}{{ has_data.sound_pressure }}{% else %}null{% endif %},{% if has_data.reverberation_time is not none %}{{ has_data.reverberation_time }}{% else %}null{% endif %},{% if has_data.speech_clarity is not none %}{{ has_data.speech_clarity }}{% else %}null{% endif %}{% else %}null,null,null{% endif %})">
             {{ p.label }}
         </div>
         {% endfor %}
@@ -159,9 +159,9 @@
 function openDataForm(pointId, label, sp, rt, sc) {
     document.getElementById('modal-point-label').textContent = label;
     document.getElementById('data-point-id').value = pointId;
-    document.getElementById('data-sp').value = sp || '';
-    document.getElementById('data-rt').value = rt || '';
-    document.getElementById('data-sc').value = sc || '';
+    document.getElementById('data-sp').value = (sp !== null && sp !== undefined) ? sp : '';
+    document.getElementById('data-rt').value = (rt !== null && rt !== undefined) ? rt : '';
+    document.getElementById('data-sc').value = (sc !== null && sc !== undefined) ? sc : '';
     document.getElementById('data-form').action = '/stages/{{ stage.id }}/sessions/{{ session.id }}/data/save';
     document.getElementById('data-modal').style.display = 'flex';
 }

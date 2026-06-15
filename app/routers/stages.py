@@ -26,6 +26,10 @@ def create_stage(request: Request, name: str = Form(...), location: str = Form("
                  plan_height: float = Form(15.0), db=Depends(get_db)):
     if not name.strip():
         raise HTTPException(status_code=400, detail="戏台名称不能为空")
+    if plan_width <= 0:
+        raise HTTPException(status_code=400, detail="平面宽度必须大于0")
+    if plan_height <= 0:
+        raise HTTPException(status_code=400, detail="平面高度必须大于0")
     cursor = db.cursor()
     cursor.execute(
         "INSERT INTO stages (name, location, description, plan_width, plan_height) VALUES (?, ?, ?, ?, ?)",
